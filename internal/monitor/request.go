@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/model"
 )
 
@@ -142,7 +143,7 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 	case model.TypeDisk:
 		r.Host = strings.TrimSpace(r.Host)
 		if r.Host == "" {
-			r.Host = "/"
+			r.Host = host.DefaultDiskPath()
 		}
 		if !filepath.IsAbs(r.Host) || strings.ContainsRune(r.Host, 0) || len(r.Host) > 255 {
 			return errors.New("磁盘路径需要是绝对路径")

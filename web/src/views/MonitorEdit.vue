@@ -50,9 +50,9 @@
               <p class="full demo-note">使用率超过阈值时记为一次失败，连续失败达到下方次数后告警。</p>
             </template>
             <template v-else-if="form.kind === 'disk'">
-              <label class="field"><span class="req">磁盘路径</span><input v-model="form.host" class="text" placeholder="/" /></label>
+              <label class="field"><span class="req">磁盘路径</span><input v-model="form.host" class="text" :placeholder="'/ 或 C:\\'" /></label>
               <label class="field"><span class="req">使用率阈值</span><div class="unit"><input v-model.number="form.threshold" class="text" type="number" min="1" max="100" /><em>%</em></div></label>
-              <p class="full demo-note">按路径所在文件系统计算用量，根分区填 /。</p>
+              <p class="full demo-note">按路径所在文件系统计算用量。Linux 根分区填 /，Windows 可填 C:\。留空时使用系统默认盘。</p>
             </template>
             <template v-else-if="form.kind === 'script'">
               <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="systemctl is-active nginx"></textarea></label>
@@ -159,7 +159,7 @@ const previewTarget = computed(() => {
   if (form.kind === 'tcp') return form.host ? `${form.host}:${form.port || ''}` : '未填写地址'
   if (form.kind === 'cpu') return `CPU 超过 ${form.threshold || 90}%`
   if (form.kind === 'memory') return `内存超过 ${form.threshold || 90}%`
-  if (form.kind === 'disk') return `${form.host || '/'} 超过 ${form.threshold || 90}%`
+  if (form.kind === 'disk') return `${form.host || '默认磁盘'} 超过 ${form.threshold || 90}%`
   if (form.kind === 'script') return (form.command || '').split('\n')[0] || '未填写脚本'
   return form.url || '未填写地址'
 })
@@ -176,7 +176,7 @@ async function save() {
   if (form.kind === 'http' && url && !/^https?:\/\//.test(url)) url = 'http://' + url
   const payload = {
     ...form, type, url, groupId: form.groupId || null,
-    host: form.kind === 'disk' ? (form.host || '/') : form.host,
+    host: form.host,
     headers: {},
   }
   saving.value = true

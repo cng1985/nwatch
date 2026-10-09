@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/model"
 )
 
@@ -24,7 +25,7 @@ func Target(m *model.Monitor) string {
 	case model.TypeDisk:
 		path := m.Host
 		if path == "" {
-			path = "/"
+			path = host.DefaultDiskPath()
 		}
 		return fmt.Sprintf("%s %.0f%%", path, thresholdOf(m))
 	case model.TypeScript:
