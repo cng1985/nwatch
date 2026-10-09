@@ -12,6 +12,7 @@ import (
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/metric"
 	"github.com/cng1985/nwatch/internal/model"
@@ -45,7 +46,11 @@ func TestDownSchedulesNotifyUntilRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := checker.NewRegistry(checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker())
+	collector := host.NewCollector()
+	reg := checker.NewRegistry(
+		checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker(),
+		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(),
+	)
 	alerts := alert.NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
 	proc := NewProcessor(db, reg, state.NewEngine(), alerts, metric.NewAggregator(), store, mailer.New(db, store, nil))
 

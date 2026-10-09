@@ -14,6 +14,8 @@ import (
 	"github.com/cng1985/nwatch/internal/alert"
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/host"
+	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/scheduler"
 	"github.com/cng1985/nwatch/internal/settings"
@@ -34,6 +36,8 @@ type Server struct {
 	sched     *scheduler.Scheduler
 	alerts    *alert.Manager
 	mail      *mailer.Service
+	collector *host.Collector
+	logs      *logview.Store
 	engine    *gin.Engine
 	http      *http.Server
 	started   time.Time
@@ -49,12 +53,15 @@ func NewServer(
 	sched *scheduler.Scheduler,
 	alerts *alert.Manager,
 	mail *mailer.Service,
+	collector *host.Collector,
+	logs *logview.Store,
 	lc fx.Lifecycle,
 ) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
 		cfg: cfg, db: db, settings: store, tokens: tokens,
 		processor: processor, pool: pool, sched: sched, alerts: alerts, mail: mail,
+		collector: collector, logs: logs,
 		engine: gin.New(), started: time.Now(),
 	}
 	s.engine.Use(gin.Recovery())
@@ -127,6 +134,11 @@ func (s *Server) routes() {
 	authed.POST("/backup", s.createBackup)
 	authed.GET("/export", s.exportConfig)
 	authed.POST("/import", s.importConfig)
+	authed.GET("/host", s.hostStatus)
+	authed.GET("/scripts/runs", s.listScriptRuns)
+	authed.GET("/scripts/runs/:id", s.getScriptRun)
+	authed.POST("/scripts/run", s.runScript)
+	authed.GET("/logs", s.listLogs)
 	s.engine.NoRoute(s.frontend)
 }
 

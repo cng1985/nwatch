@@ -6,9 +6,9 @@ type Registry struct {
 	items map[string]Checker
 }
 
-func NewRegistry(http *HTTPChecker, tlsChecker *TLSChecker, tcp *TCPChecker) *Registry {
+func NewRegistry(http *HTTPChecker, tlsChecker *TLSChecker, tcp *TCPChecker, cpu *CPUChecker, memory *MemoryChecker, disk *DiskChecker, script *ScriptChecker) *Registry {
 	r := &Registry{items: map[string]Checker{}}
-	for _, c := range []Checker{http, tlsChecker, tcp} {
+	for _, c := range []Checker{http, tlsChecker, tcp, cpu, memory, disk, script} {
 		r.items[c.Type()] = c
 	}
 	return r

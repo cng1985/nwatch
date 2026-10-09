@@ -17,6 +17,25 @@ func Target(m *model.Monitor) string {
 	case model.TypeTLS:
 		host, port, _ := TLSEndpoint(m)
 		return net.JoinHostPort(host, port)
+	case model.TypeCPU:
+		return fmt.Sprintf("CPU %.0f%%", thresholdOf(m))
+	case model.TypeMemory:
+		return fmt.Sprintf("内存 %.0f%%", thresholdOf(m))
+	case model.TypeDisk:
+		path := m.Host
+		if path == "" {
+			path = "/"
+		}
+		return fmt.Sprintf("%s %.0f%%", path, thresholdOf(m))
+	case model.TypeScript:
+		line := strings.TrimSpace(m.Command)
+		if i := strings.IndexAny(line, "\r\n"); i >= 0 {
+			line = line[:i]
+		}
+		if line == "" {
+			return "脚本"
+		}
+		return line
 	default:
 		return m.URL
 	}

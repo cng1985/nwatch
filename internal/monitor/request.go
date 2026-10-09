@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +21,9 @@ type Request struct {
 	Method              string            `json:"method"`
 	Headers             map[string]string `json:"headers"`
 	Body                string            `json:"body"`
+	Threshold           float64           `json:"threshold"`
+	Command             string            `json:"command"`
+	WorkDir             string            `json:"workDir"`
 	Interval            int               `json:"interval"`
 	Timeout             int               `json:"timeout"`
 	FailureThreshold    int               `json:"failureThreshold"`
@@ -48,9 +52,9 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 		return errors.New("名称过长")
 	}
 	switch r.Type {
-	case model.TypeHTTP, model.TypeTLS, model.TypeTCP:
+	case model.TypeHTTP, model.TypeTLS, model.TypeTCP, model.TypeCPU, model.TypeMemory, model.TypeDisk, model.TypeScript:
 	default:
-		return errors.New("监控类型仅支持 http、tls、tcp")
+		return errors.New("监控类型仅支持 http、tls、tcp、cpu、memory、disk、script")
 	}
 	if r.Interval <= 0 {
 		r.Interval = defaultsInterval
@@ -131,6 +135,33 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 		if strings.TrimSpace(r.TLSNotifyDays) == "" {
 			r.TLSNotifyDays = "30,14,7,3,1,0"
 		}
+	case model.TypeCPU, model.TypeMemory:
+		if err := r.normalizeThreshold(); err != nil {
+			return err
+		}
+	case model.TypeDisk:
+		r.Host = strings.TrimSpace(r.Host)
+		if r.Host == "" {
+			r.Host = "/"
+		}
+		if !filepath.IsAbs(r.Host) || strings.ContainsRune(r.Host, 0) || len(r.Host) > 255 {
+			return errors.New("磁盘路径需要是绝对路径")
+		}
+		if err := r.normalizeThreshold(); err != nil {
+			return err
+		}
+	case model.TypeScript:
+		r.Command = strings.TrimSpace(r.Command)
+		r.WorkDir = strings.TrimSpace(r.WorkDir)
+		if r.Command == "" {
+			return errors.New("脚本内容不能为空")
+		}
+		if len(r.Command) > 8192 || strings.ContainsRune(r.Command, 0) {
+			return errors.New("脚本内容不合法")
+		}
+		if r.WorkDir != "" && !filepath.IsAbs(r.WorkDir) {
+			return errors.New("工作目录需要是绝对路径")
+		}
 	}
 	if r.Enabled == nil {
 		t := true
@@ -153,6 +184,9 @@ func (r *Request) Apply(m *model.Monitor) {
 	m.Headers = r.Headers
 	m.SyncHeaders()
 	m.Body = r.Body
+	m.Threshold = r.Threshold
+	m.Command = r.Command
+	m.WorkDir = r.WorkDir
 	m.Interval = r.Interval
 	m.Timeout = r.Timeout
 	m.FailureThreshold = r.FailureThreshold
@@ -169,6 +203,17 @@ func (r *Request) Apply(m *model.Monitor) {
 	if r.Enabled != nil {
 		m.Enabled = *r.Enabled
 	}
+}
+
+func (r *Request) normalizeThreshold() error {
+	if r.Threshold <= 0 {
+		r.Threshold = 90
+		return nil
+	}
+	if r.Threshold < 1 || r.Threshold > 100 {
+		return errors.New("阈值需在 1 到 100 之间")
+	}
+	return nil
 }
 
 func HeadersJSON(headers map[string]string) string {

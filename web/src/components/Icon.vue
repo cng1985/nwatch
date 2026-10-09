@@ -21,6 +21,10 @@
     <path v-else-if="name === 'alert'" d="M12 9v4M12 17h.01M10.3 4.8 2.8 18a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0z" />
     <path v-else-if="name === 'search'" d="m21 21-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14" />
     <path v-else-if="name === 'bulb'" d="M9 18h6M10 21h4M8 14a6 6 0 1 1 8 0c-.8.8-2 2-2 3H10c0-1-1.2-2.2-2-3z" />
+    <path v-else-if="name === 'cpu'" d="M8 8h8v8H8zM9 4v4M12 4v4M15 4v4M9 16v4M12 16v4M15 16v4M4 9h4M4 12h4M4 15h4M16 9h4M16 12h4M16 15h4" />
+    <path v-else-if="name === 'mem'" d="M5 7h14v10H5zM8 7v10M12 7v10M16 7v10" />
+    <path v-else-if="name === 'disk'" d="M4 7h16v10H4zM4 12h16M8 15h2" />
+    <path v-else-if="name === 'script'" d="M5 4h14v16H5zM8 8l3 3-3 3M13 15h3" />
   </svg>
 </template>
 

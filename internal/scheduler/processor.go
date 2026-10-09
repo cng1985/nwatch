@@ -83,6 +83,12 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 		if err := tx.Create(&row).Error; err != nil {
 			return err
 		}
+		if m.Type == model.TypeScript {
+			run := checker.ScriptRunFromCheck(&m, result)
+			if err := tx.Create(&run).Error; err != nil {
+				return err
+			}
+		}
 		updates := map[string]any{
 			"status":                decision.Status,
 			"consecutive_failures":  decision.Failures,
@@ -182,6 +188,9 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 	if err != nil {
 		slog.Error("保存检查结果失败", "monitor", m.Name, "err", err.Error())
 		return nil, err
+	}
+	if m.Type == model.TypeScript {
+		checker.PruneScriptRuns(p.db)
 	}
 	p.dispatchEvents(ctx, &m, decision, saved)
 	var fresh model.Monitor
