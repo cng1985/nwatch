@@ -14,6 +14,7 @@ import (
 	"github.com/cng1985/nwatch/internal/alert"
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/scheduler"
 	"github.com/cng1985/nwatch/internal/settings"
 	"github.com/cng1985/nwatch/internal/version"
@@ -32,6 +33,7 @@ type Server struct {
 	pool      *scheduler.Pool
 	sched     *scheduler.Scheduler
 	alerts    *alert.Manager
+	mail      *mailer.Service
 	engine    *gin.Engine
 	http      *http.Server
 	started   time.Time
@@ -46,12 +48,13 @@ func NewServer(
 	pool *scheduler.Pool,
 	sched *scheduler.Scheduler,
 	alerts *alert.Manager,
+	mail *mailer.Service,
 	lc fx.Lifecycle,
 ) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
 		cfg: cfg, db: db, settings: store, tokens: tokens,
-		processor: processor, pool: pool, sched: sched, alerts: alerts,
+		processor: processor, pool: pool, sched: sched, alerts: alerts, mail: mail,
 		engine: gin.New(), started: time.Now(),
 	}
 	s.engine.Use(gin.Recovery())
@@ -118,6 +121,8 @@ func (s *Server) routes() {
 	authed.GET("/notification-logs", s.listNotifyLogs)
 	authed.GET("/settings", s.getSettings)
 	authed.PUT("/settings", s.updateSettings)
+	authed.PUT("/settings/mail", s.updateMail)
+	authed.POST("/settings/mail/test", s.testMail)
 	authed.GET("/backup", s.downloadBackup)
 	authed.POST("/backup", s.createBackup)
 	authed.GET("/export", s.exportConfig)

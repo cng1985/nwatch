@@ -20,6 +20,7 @@ config.yaml
 - 调度器每秒领取到期任务，固定大小的工作池执行，同一个监控不会重叠检查
 - 连续失败后才标记为异常，恢复也可要求连续成功
 - 钉钉（支持加签）、企业微信、Webhook，通知异步发送并记录结果
+- 邮件：系统配置里填写 SMTP。连续失败达到阈值后发信；服务一直异常时，每次检测失败都会再发。某一封发送失败会持续重试，直到成功
 - 证书按 30/14/7/3/1/0 天阈值各提醒一次
 - 检测历史、分钟/小时/天统计、1 小时到 30 天可用率
 - Web 管理台：总览、监控、证书、告警、通知、分组、系统配置
@@ -52,7 +53,17 @@ NMONITOR_PASSWORD
 NMONITOR_JWT_SECRET
 NMONITOR_CONFIG
 NMONITOR_USERNAME
+NMONITOR_SMTP_ENABLED
+NMONITOR_SMTP_HOST
+NMONITOR_SMTP_PORT
+NMONITOR_SMTP_USERNAME
+NMONITOR_SMTP_PASSWORD
+NMONITOR_SMTP_FROM
+NMONITOR_SMTP_TO
+NMONITOR_SMTP_ENCRYPTION
 ```
+
+`NMONITOR_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。
 
 ## systemd
 

@@ -31,3 +31,13 @@ backup:
   dir: ./data/backups
   retention_days: 7
   hour: 3
+
+# 检测失败后发信。密码不要写进文件，用环境变量 NMONITOR_SMTP_PASSWORD。
+mail:
+  enabled: false
+  host: ""
+  port: 587
+  username: ""
+  from: ""
+  to: ""
+  encryption: starttls

@@ -4,18 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/cng1985/nwatch/internal/mailer/fakesmtp"
 
 	"github.com/cng1985/nwatch/internal/alert"
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/metric"
 	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/notifier"
@@ -54,14 +59,17 @@ func newTestServer(t *testing.T) *Server {
 	alerts := alert.NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
 	alerts.Start(1)
 	t.Cleanup(func() { alerts.Stop(context.Background()) })
-	proc := scheduler.NewProcessor(db, reg, state.NewEngine(), alerts, metric.NewAggregator(), store)
+	mail := mailer.New(db, store, nil)
+	mail.Start()
+	t.Cleanup(func() { mail.Stop(context.Background()) })
+	proc := scheduler.NewProcessor(db, reg, state.NewEngine(), alerts, metric.NewAggregator(), store, mail)
 	pool := scheduler.NewPool(2, 8, proc, nil)
 	pool.Start()
 	t.Cleanup(func() { pool.Stop(context.Background()) })
 	sched := scheduler.NewScheduler(time.Hour, db, pool, nil)
 	sched.Start()
 	t.Cleanup(sched.Stop)
-	return NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, nil)
+	return NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, nil)
 }
 
 func TestLoginAndMonitorCheckFlow(t *testing.T) {
@@ -158,6 +166,89 @@ func TestNotifierMaskAndWebhook(t *testing.T) {
 	}
 	if !bytes.Contains(got, []byte("TEST")) {
 		t.Fatalf("payload %s", got)
+	}
+}
+
+func TestMailOnContinuedFailure(t *testing.T) {
+	smtpSrv := fakesmtp.Start(t)
+	host, portText, err := net.SplitHostPort(smtpSrv.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, _ := strconv.Atoi(portText)
+	s := newTestServer(t)
+	token := login(t, s)
+	const secret = "smtp-secret-xyz"
+	rec := do(t, s, http.MethodPut, "/api/settings/mail", token, map[string]any{
+		"enabled": true, "host": host, "port": port, "username": "mailer",
+		"password": secret, "from": "nmonitor@example.com", "to": "ops@example.com, duty@example.com",
+		"encryption": "none",
+	})
+	if rec.Code != 200 {
+		t.Fatalf("save mail %d %s", rec.Code, rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte(secret)) {
+		t.Fatalf("password leaked: %s", rec.Body.String())
+	}
+	rec = do(t, s, http.MethodGet, "/api/settings", token, nil)
+	if rec.Code != 200 || bytes.Contains(rec.Body.Bytes(), []byte(secret)) || !bytes.Contains(rec.Body.Bytes(), []byte(`"passwordSet":true`)) {
+		t.Fatalf("settings %d %s", rec.Code, rec.Body.String())
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "邮件探针", "type": "http", "url": upstream.URL, "method": "GET",
+		"interval": 30, "timeout": 3, "failureThreshold": 2, "recoveryThreshold": 1,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("create %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Data model.Monitor `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	check := "/api/monitors/" + strconv.FormatUint(uint64(created.Data.ID), 10) + "/check"
+	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
+		t.Fatalf("up check %d %s", rec.Code, rec.Body.String())
+	}
+	upstream.Close()
+	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
+		t.Fatalf("first failure %d %s", rec.Code, rec.Body.String())
+	}
+	if len(smtpSrv.Messages()) != 0 {
+		t.Fatalf("threshold not reached, got %d mails", len(smtpSrv.Messages()))
+	}
+	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
+		t.Fatalf("second failure %d %s", rec.Code, rec.Body.String())
+	}
+	if len(smtpSrv.Messages()) != 1 || strings.Contains(smtpSrv.Messages()[0], "仍然异常") {
+		t.Fatalf("expected first alert, got %#v", smtpSrv.Messages())
+	}
+	if !strings.Contains(smtpSrv.Messages()[0], "服务异常") || !strings.Contains(smtpSrv.Messages()[0], "邮件探针") {
+		t.Fatalf("alert body %#v", smtpSrv.Messages()[0])
+	}
+	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
+		t.Fatalf("third failure %d %s", rec.Code, rec.Body.String())
+	}
+	msgs := smtpSrv.Messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "服务仍然异常") {
+		t.Fatalf("expected repeat mail, got %#v", msgs)
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/settings/mail/test", token, map[string]any{
+		"enabled": true, "host": host, "port": port, "from": "nmonitor@example.com", "to": "ops@example.com",
+		"encryption": "none",
+	})
+	if rec.Code != 200 {
+		t.Fatalf("test mail %d %s", rec.Code, rec.Body.String())
+	}
+	if len(smtpSrv.Messages()) != 3 || !strings.Contains(smtpSrv.Messages()[2], "测试邮件") {
+		t.Fatalf("test body %#v", smtpSrv.Messages())
 	}
 }
 

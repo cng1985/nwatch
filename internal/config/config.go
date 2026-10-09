@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -17,6 +19,7 @@ type Config struct {
 	Security  SecurityConfig  `yaml:"security"`
 	Log       LogConfig       `yaml:"log"`
 	Backup    BackupConfig    `yaml:"backup"`
+	Mail      MailConfig      `yaml:"mail"`
 
 	ConfigPath string `yaml:"-"`
 }
@@ -66,6 +69,17 @@ type BackupConfig struct {
 	Hour          int    `yaml:"hour"`
 }
 
+type MailConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	Host       string `yaml:"host"`
+	Port       int    `yaml:"port"`
+	Username   string `yaml:"username"`
+	Password   string `yaml:"password"`
+	From       string `yaml:"from"`
+	To         string `yaml:"to"`
+	Encryption string `yaml:"encryption"`
+}
+
 func Default() *Config {
 	return &Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8080},
@@ -81,6 +95,7 @@ func Default() *Config {
 		Security: SecurityConfig{Username: "admin", JWTTTL: 24 * time.Hour},
 		Log:      LogConfig{Level: "info"},
 		Backup:   BackupConfig{Enabled: true, Dir: "./data/backups", RetentionDays: 7, Hour: 3},
+		Mail:     MailConfig{Port: 587, Encryption: "starttls"},
 	}
 }
 
@@ -123,6 +138,32 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("NMONITOR_USERNAME"); v != "" {
 		c.Security.Username = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_ENABLED"); v != "" {
+		c.Mail.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
+	if v := os.Getenv("NMONITOR_SMTP_HOST"); v != "" {
+		c.Mail.Host = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Mail.Port = n
+		}
+	}
+	if v := os.Getenv("NMONITOR_SMTP_USERNAME"); v != "" {
+		c.Mail.Username = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_PASSWORD"); v != "" {
+		c.Mail.Password = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_FROM"); v != "" {
+		c.Mail.From = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_TO"); v != "" {
+		c.Mail.To = v
+	}
+	if v := os.Getenv("NMONITOR_SMTP_ENCRYPTION"); v != "" {
+		c.Mail.Encryption = v
 	}
 }
 
@@ -177,5 +218,20 @@ func (c *Config) normalize() {
 	}
 	if c.Backup.RetentionDays <= 0 {
 		c.Backup.RetentionDays = 7
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Mail.Encryption)) {
+	case "ssl", "tls", "smtps":
+		c.Mail.Encryption = "ssl"
+	case "none", "plain", "off":
+		c.Mail.Encryption = "none"
+	default:
+		c.Mail.Encryption = "starttls"
+	}
+	if c.Mail.Port <= 0 {
+		if c.Mail.Encryption == "ssl" {
+			c.Mail.Port = 465
+		} else {
+			c.Mail.Port = 587
+		}
 	}
 }

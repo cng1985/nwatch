@@ -2,6 +2,7 @@ package settings
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,7 +21,26 @@ const (
 	KeyDefaultTimeout      = "default_timeout"
 	KeyDefaultInterval     = "default_interval"
 	KeyPasswordHash        = "password_hash"
+	KeySMTPEnabled         = "smtp_enabled"
+	KeySMTPHost            = "smtp_host"
+	KeySMTPPort            = "smtp_port"
+	KeySMTPUsername        = "smtp_username"
+	KeySMTPPassword        = "smtp_password"
+	KeySMTPFrom            = "smtp_from"
+	KeySMTPTo              = "smtp_to"
+	KeySMTPEncryption      = "smtp_encryption"
 )
+
+type SMTPConfig struct {
+	Enabled    bool
+	Host       string
+	Port       int
+	Username   string
+	Password   string
+	From       string
+	To         string
+	Encryption string
+}
 
 type Store struct {
 	mu  sync.RWMutex
@@ -35,6 +55,7 @@ type Store struct {
 	DefaultTimeout          int
 	DefaultInterval         int
 	PasswordHash            string
+	smtp                    SMTPConfig
 }
 
 func New(db *gorm.DB, cfg *config.Config) (*Store, error) {
@@ -64,7 +85,29 @@ func (s *Store) load() error {
 	s.DefaultTimeout = pickInt(values[KeyDefaultTimeout], int(s.cfg.Monitor.DefaultTimeout.Seconds()))
 	s.DefaultInterval = pickInt(values[KeyDefaultInterval], int(s.cfg.Monitor.DefaultInterval.Seconds()))
 	s.PasswordHash = values[KeyPasswordHash]
+	s.smtp = SMTPConfig{
+		Enabled:    pickBool(values, KeySMTPEnabled, s.cfg.Mail.Enabled),
+		Host:       pickPresent(values, KeySMTPHost, s.cfg.Mail.Host),
+		Port:       pickIntPresent(values, KeySMTPPort, s.cfg.Mail.Port),
+		Username:   pickPresent(values, KeySMTPUsername, s.cfg.Mail.Username),
+		Password:   pickPresent(values, KeySMTPPassword, s.cfg.Mail.Password),
+		From:       pickPresent(values, KeySMTPFrom, s.cfg.Mail.From),
+		To:         pickPresent(values, KeySMTPTo, s.cfg.Mail.To),
+		Encryption: pickPresent(values, KeySMTPEncryption, s.cfg.Mail.Encryption),
+	}
+	if s.smtp.Port <= 0 {
+		s.smtp.Port = 587
+	}
+	if s.smtp.Encryption == "" {
+		s.smtp.Encryption = "starttls"
+	}
 	return nil
+}
+
+func (s *Store) SMTP() SMTPConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.smtp
 }
 
 func (s *Store) Snapshot() Store {
@@ -140,6 +183,41 @@ func pick(v, def string) string {
 		return def
 	}
 	return v
+}
+
+func pickPresent(values map[string]string, key, def string) string {
+	v, ok := values[key]
+	if !ok {
+		return def
+	}
+	return v
+}
+
+func pickIntPresent(values map[string]string, key string, def int) int {
+	v, ok := values[key]
+	if !ok || v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func pickBool(values map[string]string, key string, def bool) bool {
+	v, ok := values[key]
+	if !ok || v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
 }
 
 func pickInt(v string, def int) int {
