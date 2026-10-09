@@ -124,16 +124,14 @@ func (m *Manager) writeLog(job job, ok bool, response, errMsg string) {
 	}
 }
 
+// Fanout 把一条告警发给所有已启用的通知渠道。关闭的渠道不发送。
 func (m *Manager) Fanout(monitorID uint, event model.AlertEvent) {
-	var monitor model.Monitor
-	if err := m.db.Preload("Notifiers").First(&monitor, monitorID).Error; err != nil {
+	var notifiers []model.Notifier
+	if err := m.db.Where("enabled = ?", true).Find(&notifiers).Error; err != nil {
 		slog.Error("加载通知渠道失败", "monitor", monitorID, "err", err.Error())
 		return
 	}
-	for _, n := range monitor.Notifiers {
-		if !n.Enabled {
-			continue
-		}
+	for _, n := range notifiers {
 		m.enqueue(n, event)
 	}
 }

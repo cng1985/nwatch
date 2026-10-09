@@ -34,9 +34,9 @@ func TestReminderCadence(t *testing.T) {
 	var mu sync.Mutex
 	var hooks []string
 	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf, _ := io.ReadAll(r.Body)
+		_, _ = io.ReadAll(r.Body)
 		mu.Lock()
-		hooks = append(hooks, string(buf))
+		hooks = append(hooks, r.URL.Path)
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -78,11 +78,20 @@ func TestReminderCadence(t *testing.T) {
 	if err := db.Create(&mon).Error; err != nil {
 		t.Fatal(err)
 	}
-	channel := model.Notifier{Name: "hook", Type: model.NotifierWebhook, WebhookURL: hook.URL, Enabled: true}
-	if err := db.Create(&channel).Error; err != nil {
+	bound := model.Notifier{Name: "bound", Type: model.NotifierWebhook, WebhookURL: hook.URL + "/bound", Enabled: true}
+	free := model.Notifier{Name: "free", Type: model.NotifierWebhook, WebhookURL: hook.URL + "/free", Enabled: true}
+	off := model.Notifier{Name: "off", Type: model.NotifierWebhook, WebhookURL: hook.URL + "/off", Enabled: false}
+	if err := db.Create(&bound).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Model(&mon).Association("Notifiers").Append(&channel); err != nil {
+	if err := db.Create(&free).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&off).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 只绑定其中一个，未绑定的已启用渠道也必须收到。
+	if err := db.Model(&mon).Association("Notifiers").Append(&bound); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +101,8 @@ func TestReminderCadence(t *testing.T) {
 	}
 
 	reminder.Scan(start.Add(15 * time.Second))
-	waitHooks(t, &mu, &hooks, 1)
+	waitHooks(t, &mu, &hooks, 2)
+	assertChannels(t, &mu, &hooks, 1)
 	mails := smtpSrv.Messages()
 	if len(mails) != 1 || strings.Contains(mails[0], "仍然异常") || !strings.Contains(mails[0], "服务异常") || !strings.Contains(mails[0], "支付") {
 		t.Fatalf("first notice %#v", mails)
@@ -100,12 +110,13 @@ func TestReminderCadence(t *testing.T) {
 	assertStage(t, db, mon.ID, 1, start.Add(45*time.Second))
 
 	reminder.Scan(start.Add(16 * time.Second))
-	if len(smtpSrv.Messages()) != 1 || hookCount(&mu, &hooks) != 1 {
+	if len(smtpSrv.Messages()) != 1 || hookCount(&mu, &hooks) != 2 {
 		t.Fatalf("duplicate after first notice mails=%d hooks=%d", len(smtpSrv.Messages()), hookCount(&mu, &hooks))
 	}
 
 	reminder.Scan(start.Add(45 * time.Second))
-	waitHooks(t, &mu, &hooks, 2)
+	waitHooks(t, &mu, &hooks, 4)
+	assertChannels(t, &mu, &hooks, 2)
 	mails = smtpSrv.Messages()
 	if len(mails) != 2 || !strings.Contains(mails[1], "服务仍然异常") {
 		t.Fatalf("second notice %#v", mails)
@@ -113,7 +124,8 @@ func TestReminderCadence(t *testing.T) {
 	assertStage(t, db, mon.ID, 2, start.Add(105*time.Second))
 
 	reminder.Scan(start.Add(105 * time.Second))
-	waitHooks(t, &mu, &hooks, 3)
+	waitHooks(t, &mu, &hooks, 6)
+	assertChannels(t, &mu, &hooks, 3)
 	if len(smtpSrv.Messages()) != 3 {
 		t.Fatalf("third notice %#v", smtpSrv.Messages())
 	}
@@ -125,9 +137,10 @@ func TestReminderCadence(t *testing.T) {
 		t.Fatal(err)
 	}
 	reminder.Scan(start.Add(10 * time.Minute))
-	if len(smtpSrv.Messages()) != 3 || hookCount(&mu, &hooks) != 3 {
+	if len(smtpSrv.Messages()) != 3 || hookCount(&mu, &hooks) != 6 {
 		t.Fatalf("recovered still notified mails=%d hooks=%d", len(smtpSrv.Messages()), hookCount(&mu, &hooks))
 	}
+	assertChannels(t, &mu, &hooks, 3)
 }
 
 func TestReminderCatchUpAndBackfill(t *testing.T) {
@@ -191,6 +204,19 @@ func assertStage(t *testing.T, db *gorm.DB, id uint, stage int, next time.Time) 
 			got = fresh.NextNotifyAt.Format(time.RFC3339Nano)
 		}
 		t.Fatalf("stage=%d next=%s want stage=%d next=%s", fresh.NotifyStage, got, stage, next.Format(time.RFC3339Nano))
+	}
+}
+
+func assertChannels(t *testing.T, mu *sync.Mutex, hooks *[]string, each int) {
+	t.Helper()
+	got := map[string]int{}
+	mu.Lock()
+	for _, path := range *hooks {
+		got[path]++
+	}
+	mu.Unlock()
+	if got["/bound"] != each || got["/free"] != each || got["/off"] != 0 {
+		t.Fatalf("channels %#v want bound=%d free=%d off=0", got, each, each)
 	}
 }
 

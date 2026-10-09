@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-head">
-      <div><h1>通知渠道</h1><p>钉钉、企业微信和 Webhook 彼此独立。服务异常后按 15 秒、45 秒、之后每分钟通知，直到恢复。发送失败不会影响监控状态。</p></div>
+      <div><h1>通知渠道</h1><p>已启用的渠道都会收到告警。服务异常后按 15 秒、45 秒、之后每分钟通知，直到恢复。关闭的渠道不发送。</p></div>
       <button class="btn primary" @click="open()">新增渠道</button>
     </div>
     <div class="card table-wrap">

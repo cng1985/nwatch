@@ -78,13 +78,7 @@
             <label class="field"><span class="req">连续失败次数</span><div class="unit"><input v-model.number="form.failureThreshold" class="text" type="number" min="1" /><em>次</em></div></label>
             <label class="field"><span class="req">连续恢复次数</span><div class="unit"><input v-model.number="form.recoveryThreshold" class="text" type="number" min="1" /><em>次</em></div></label>
             <p class="full demo-note" style="margin-top:-6px">连续失败达到阈值后触发告警，避免短暂波动造成误报。</p>
-            <div class="full">
-              <span class="req" style="font-weight:600">通知渠道</span>
-              <div class="checks">
-                <label v-for="item in notifiers" :key="item.id" class="check"><input v-model="form.notifierIds" type="checkbox" :value="item.id" /> {{ item.name }}</label>
-                <span v-if="!notifiers.length" class="demo-note">尚未配置通知渠道，可稍后在通知渠道中添加。</span>
-              </div>
-            </div>
+            <p class="full demo-note" style="margin-top:-6px">告警会发到所有已启用的通知渠道，包括钉钉、企业微信、Webhook，以及系统配置里启用的邮件。关闭的渠道不发送。</p>
           </div>
         </section>
       </div>
@@ -99,7 +93,7 @@
         <div class="kv"><span>超时时间</span><b>{{ form.timeout }} 秒</b></div>
         <div class="kv"><span>异常判定</span><b>连续失败 {{ form.failureThreshold }} 次</b></div>
         <div class="kv"><span>恢复判定</span><b>连续成功 {{ form.recoveryThreshold }} 次</b></div>
-        <div class="kv"><span>通知渠道</span><b>{{ form.notifierIds.length }} 个</b></div>
+        <div class="kv"><span>通知渠道</span><b>全部已启用</b></div>
         <div class="tip">
           <b><Icon name="bulb" style="width:16px;height:16px;color:#12b981" /> 配置小贴士</b>
           建议使用专用的 /health 接口作为监控目标。在创建后，您可以立即执行一次检测，确认服务配置。
@@ -115,7 +109,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
-import { demoGroups, demoNotifiers, presentDemo } from '../demo'
+import { demoGroups, presentDemo } from '../demo'
 import { isDemo } from '../format'
 
 const route = useRoute()
@@ -123,7 +117,6 @@ const router = useRouter()
 const editing = computed(() => !!route.params.id)
 const demoMode = isDemo()
 const groups = ref([])
-const notifiers = ref([])
 const saving = ref(false)
 const error = ref('')
 const advanced = ref(false)
@@ -173,7 +166,6 @@ async function save() {
 onMounted(async () => {
   if (demoMode) {
     groups.value = demoGroups
-    notifiers.value = demoNotifiers
     const row = editing.value ? presentDemo().overview.find((item) => String(item.id) === String(route.params.id)) : null
     if (row) {
       const kind = row.type === 'tcp' ? 'tcp' : row.type === 'tls' ? 'tls' : (row.url || '').startsWith('https') ? 'https' : 'http'
@@ -184,7 +176,6 @@ onMounted(async () => {
     return
   }
   groups.value = await api('/api/groups')
-  notifiers.value = await api('/api/notifiers')
   if (!editing.value) return
   const row = await api('/api/monitors/' + route.params.id)
   const kind = row.type === 'tcp' ? 'tcp' : row.type === 'tls' ? 'tls' : (row.url || '').startsWith('https') ? 'https' : 'http'
