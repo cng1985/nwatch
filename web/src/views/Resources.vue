@@ -31,12 +31,9 @@
     </div>
     <div class="card card-pad" style="margin-bottom:14px">
       <div class="card-title">
-        <div><h2>使用率趋势</h2><p>采样间隔约 15 秒，保留 7 天。</p></div>
-        <div class="seg">
-          <button v-for="item in series" :key="item.id" :class="{ on: metric === item.id }" @click="metric = item.id">{{ item.label }}</button>
-        </div>
+        <div><h2>使用率趋势</h2><p>三条曲线共用时间轴，虚线标出 70% 和 90%。采样约 15 秒一次，保留 7 天。</p></div>
       </div>
-      <Charts v-if="points.length" kind="area" :points="points" unit="%" :max="100" />
+      <UsageChart v-if="history.length" :points="history" />
       <div v-else class="empty">还没有采样</div>
     </div>
     <div class="card table-wrap">
@@ -62,14 +59,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
-import Charts from '../components/Charts.vue'
+import UsageChart from '../components/UsageChart.vue'
 import { api } from '../api'
 import { bytes, duration, isDemo } from '../format'
 
 const ranges = [{ id: '1h', label: '1 小时' }, { id: '6h', label: '6 小时' }, { id: '24h', label: '24 小时' }, { id: '7d', label: '7 天' }]
-const series = [{ id: 'cpu', label: 'CPU' }, { id: 'mem', label: '内存' }, { id: 'disk', label: '磁盘' }]
 const range = ref('1h')
-const metric = ref('cpu')
 const history = ref([])
 const current = reactive({
   hostname: '', cpuCount: 0, cpuPercent: 0, memPercent: 0, memUsed: 0, memTotal: 0,
@@ -80,11 +75,6 @@ const subtitle = computed(() => {
   const name = current.hostname || '本机'
   return `${name} · 已运行 ${duration(Math.floor(current.uptime || 0))}`
 })
-const points = computed(() => history.value.map((item) => ({
-  time: item.time,
-  avg: metric.value === 'mem' ? item.memPercent : metric.value === 'disk' ? item.diskPercent : item.cpuPercent,
-})))
-
 function tone(value) {
   if (value >= 90) return 'bad'
   if (value >= 70) return 'warn'
@@ -102,11 +92,11 @@ async function load() {
       ],
     })
     const now = Date.now()
-    history.value = Array.from({ length: 12 }, (_, i) => ({
-      time: new Date(now - (11 - i) * 300000).toISOString(),
-      cpuPercent: 12 + (i % 5) * 3,
-      memPercent: 44 + (i % 3),
-      diskPercent: 61,
+    history.value = Array.from({ length: 24 }, (_, i) => ({
+      time: new Date(now - (23 - i) * 150000).toISOString(),
+      cpuPercent: 16 + Math.sin(i / 3) * 6,
+      memPercent: 72 + (i % 4),
+      diskPercent: 88 + (i % 3) * 0.4,
     }))
     return
   }
