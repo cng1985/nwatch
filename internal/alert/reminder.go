@@ -60,6 +60,7 @@ func (r *Reminder) Start() {
 	}
 	r.running = true
 	r.stateMu.Unlock()
+	slog.Info("故障提醒已启动")
 	go r.loop()
 }
 
@@ -85,6 +86,7 @@ func (r *Reminder) loop() {
 	defer close(r.done)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	r.Scan(time.Now())
 	for {
 		select {
 		case <-r.stop:
@@ -95,7 +97,8 @@ func (r *Reminder) loop() {
 	}
 }
 
-// Scan 找出到点的故障监控，每个时间点最多发一次。
+// Scan 找出仍在故障中的监控。是否到点在程序里判断，避免数据库里的时间字符串对不上。
+// 每个时间点最多发一次。升级前就已经异常、还没有通知计划的监控也会补上。
 func (r *Reminder) Scan(now time.Time) {
 	if r == nil || r.db == nil {
 		return
@@ -111,10 +114,7 @@ func (r *Reminder) Scan(now time.Time) {
 	}()
 
 	var rows []model.Monitor
-	err := r.db.Where(
-		"enabled = ? AND status = ? AND incident_started_at IS NOT NULL AND (next_notify_at IS NULL OR next_notify_at <= ?)",
-		true, model.StatusDown, now,
-	).Find(&rows).Error
+	err := r.db.Where("enabled = ? AND status = ?", true, model.StatusDown).Find(&rows).Error
 	if err != nil {
 		slog.Error("读取待通知监控失败", "err", err.Error())
 		return
@@ -125,23 +125,17 @@ func (r *Reminder) Scan(now time.Time) {
 }
 
 func (r *Reminder) fire(m *model.Monitor, now time.Time) {
-	if m.IncidentStartedAt == nil {
+	if !r.ensureIncident(m, now) {
 		return
 	}
 	send, sentStage, newStage, next := Plan(*m.IncidentStartedAt, m.NotifyStage, now)
 	if !send {
-		if m.NextNotifyAt == nil {
-			res := r.db.Model(&model.Monitor{}).
-				Where("id = ? AND status = ? AND next_notify_at IS NULL", m.ID, model.StatusDown).
-				Updates(map[string]any{"next_notify_at": next, "updated_at": time.Now()})
-			if res.Error != nil {
-				slog.Error("写入通知计划失败", "monitor", m.Name, "err", res.Error.Error())
-			}
-		}
+		r.rememberNext(m, next)
 		return
 	}
+	// 旧数据的 notify_stage 是 NULL。GORM 读出来是 0，但 SQL 里 NULL = 0 不成立，认领会一直失败。
 	res := r.db.Model(&model.Monitor{}).
-		Where("id = ? AND status = ? AND notify_stage = ?", m.ID, model.StatusDown, m.NotifyStage).
+		Where("id = ? AND status = ? AND COALESCE(notify_stage, 0) = ?", m.ID, model.StatusDown, m.NotifyStage).
 		Updates(map[string]any{
 			"notify_stage":   newStage,
 			"next_notify_at": next,
@@ -160,6 +154,43 @@ func (r *Reminder) fire(m *model.Monitor, now time.Time) {
 	}
 	slog.Info("发送故障提醒", "monitor", m.Name, "stage", sentStage, "next", next.Format(time.RFC3339))
 	r.dispatch(m, now, sentStage > 0)
+}
+
+// ensureIncident 给升级前就已异常、没有故障开始时间的监控补上时间。
+// 用最近一次失败时间，这样已经超过 15 秒的会立刻补发，而不是再等一轮。
+func (r *Reminder) ensureIncident(m *model.Monitor, now time.Time) bool {
+	if m.IncidentStartedAt != nil {
+		return true
+	}
+	start := now
+	if m.LastFailureAt != nil && !m.LastFailureAt.After(now) {
+		start = *m.LastFailureAt
+	}
+	res := r.db.Model(&model.Monitor{}).
+		Where("id = ? AND status = ? AND incident_started_at IS NULL", m.ID, model.StatusDown).
+		Updates(map[string]any{"incident_started_at": start, "updated_at": time.Now()})
+	if res.Error != nil {
+		slog.Error("补记故障开始时间失败", "monitor", m.Name, "err", res.Error.Error())
+		return false
+	}
+	if res.RowsAffected == 0 {
+		return false
+	}
+	m.IncidentStartedAt = &start
+	slog.Info("补记故障开始时间", "monitor", m.Name, "start", start.Format(time.RFC3339))
+	return true
+}
+
+func (r *Reminder) rememberNext(m *model.Monitor, next time.Time) {
+	if m.NextNotifyAt != nil {
+		return
+	}
+	res := r.db.Model(&model.Monitor{}).
+		Where("id = ? AND status = ? AND next_notify_at IS NULL", m.ID, model.StatusDown).
+		Updates(map[string]any{"next_notify_at": next, "updated_at": time.Now()})
+	if res.Error != nil {
+		slog.Error("写入通知计划失败", "monitor", m.Name, "err", res.Error.Error())
+	}
 }
 
 func (r *Reminder) dispatch(m *model.Monitor, now time.Time, ongoing bool) {

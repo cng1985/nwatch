@@ -192,6 +192,104 @@ func TestReminderCatchUpAndBackfill(t *testing.T) {
 	assertStage(t, db, early.ID, 0, earlyStart.Add(15*time.Second))
 }
 
+func TestReminderLegacyDownNotifiesWeCom(t *testing.T) {
+	var mu sync.Mutex
+	var bodies []string
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		bodies = append(bodies, string(raw))
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"errcode":0,"errmsg":"ok"}`))
+	}))
+	defer hook.Close()
+
+	cfg := config.Default()
+	cfg.Database.Path = filepath.Join(t.TempDir(), "legacy.db")
+	db, err := database.Open(cfg.Database.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = database.Close(db) })
+	if err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	store, err := settings.New(db, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alerts := NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
+	alerts.Start(1)
+	t.Cleanup(func() { alerts.Stop(context.Background()) })
+	reminder := NewReminder(db, alerts, nil, nil)
+
+	loc := time.FixedZone("CST", 8*3600)
+	now := time.Date(2026, 10, 9, 15, 30, 0, 0, loc)
+	oldStart := now.Add(-3 * time.Minute)
+	recentFail := now.Add(-5 * time.Second)
+
+	old := model.Monitor{
+		Name: "失败测试", Type: model.TypeHTTP, URL: "https://api.example.com/a", Method: "GET",
+		Interval: 60, Timeout: 5, Enabled: true, Status: model.StatusDown,
+		FailureThreshold: 3, RecoveryThreshold: 1,
+		LastMessage: "HTTP 状态码 404，期望 200", ConsecutiveFailures: 8,
+		IncidentStartedAt: &oldStart, NotifyStage: 0,
+	}
+	missing := model.Monitor{
+		Name: "demo", Type: model.TypeHTTP, URL: "https://api.example.com/demo", Method: "GET",
+		Interval: 60, Timeout: 5, Enabled: true, Status: model.StatusDown,
+		FailureThreshold: 3, RecoveryThreshold: 1,
+		LastMessage: "HTTP 状态码 404，期望 200", ConsecutiveFailures: 6,
+		LastFailureAt: &oldStart,
+	}
+	fresh := model.Monitor{
+		Name: "刚失败", Type: model.TypeHTTP, URL: "https://api.example.com/new", Method: "GET",
+		Interval: 60, Timeout: 5, Enabled: true, Status: model.StatusDown,
+		FailureThreshold: 3, RecoveryThreshold: 1,
+		LastMessage: "HTTP 状态码 404，期望 200",
+		LastFailureAt: &recentFail,
+	}
+	for _, row := range []*model.Monitor{&old, &missing, &fresh} {
+		if err := db.Create(row).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 升级前已经异常的行，新列是 NULL，不是 0。监控也没有绑定任何渠道。
+	ids := []uint{old.ID, missing.ID, fresh.ID}
+	if err := db.Model(&model.Monitor{}).Where("id IN ?", ids).Updates(map[string]any{
+		"notify_stage":   gorm.Expr("NULL"),
+		"next_notify_at": gorm.Expr("NULL"),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Monitor{}).Where("id IN ?", []uint{missing.ID, fresh.ID}).Update("incident_started_at", gorm.Expr("NULL")).Error; err != nil {
+		t.Fatal(err)
+	}
+	wecom := model.Notifier{Name: "企业微信", Type: model.NotifierWeCom, WebhookURL: hook.URL, Enabled: true}
+	if err := db.Create(&wecom).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	reminder.Scan(now)
+	waitHooks(t, &mu, &bodies, 2)
+	mu.Lock()
+	got := strings.Join(bodies, "\n")
+	mu.Unlock()
+	if !strings.Contains(got, "失败测试") || !strings.Contains(got, "demo") || strings.Contains(got, "刚失败") {
+		t.Fatalf("bodies=%s", got)
+	}
+	if strings.Contains(got, "通知测试") {
+		t.Fatalf("sent a test message: %s", got)
+	}
+	assertStage(t, db, fresh.ID, 0, recentFail.Add(15*time.Second))
+
+	reminder.Scan(now.Add(time.Second))
+	if hookCount(&mu, &bodies) != 2 {
+		t.Fatalf("duplicate sends: %d", hookCount(&mu, &bodies))
+	}
+}
+
 func assertStage(t *testing.T, db *gorm.DB, id uint, stage int, next time.Time) {
 	t.Helper()
 	var fresh model.Monitor
