@@ -57,7 +57,9 @@ const crumbs = computed(() => route.meta.crumbs || ['工作空间'])
 const groups = [
   { label: '工作空间', items: [
     { to: '/', label: '系统总览', icon: 'home' },
+    { to: '/resources', label: '主机资源', icon: 'cpu' },
     { to: '/monitors', label: '监控列表', icon: 'list' },
+    { to: '/scripts', label: '脚本执行', icon: 'script' },
     { to: '/certificates', label: 'HTTPS 证书', icon: 'cert' },
   ] },
   { label: '告警与通知', items: [
@@ -67,6 +69,7 @@ const groups = [
   ] },
   { label: '管理', items: [
     { to: '/groups', label: '监控分组', icon: 'folder' },
+    { to: '/logs', label: '运行日志', icon: 'file' },
     { to: '/settings', label: '系统配置', icon: 'settings' },
   ] },
 ]

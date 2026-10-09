@@ -2,10 +2,10 @@ package app
 
 import (
 	"log/slog"
-	"os"
 	"strings"
 
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/settings"
 	"github.com/cng1985/nwatch/internal/version"
 	"go.uber.org/fx"
@@ -16,7 +16,7 @@ var loggerModule = fx.Module("logger",
 	fx.Invoke(logReady),
 )
 
-func newLogger(cfg *config.Config) *slog.Logger {
+func newLogger(cfg *config.Config, logs *logview.Store) *slog.Logger {
 	var level slog.Level
 	switch strings.ToLower(cfg.Log.Level) {
 	case "debug":
@@ -28,12 +28,12 @@ func newLogger(cfg *config.Config) *slog.Logger {
 	default:
 		level = slog.LevelInfo
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	logger := slog.New(logs.Handler(level))
 	slog.SetDefault(logger)
 	return logger
 }
 
-func logReady(cfg *config.Config, store *settings.Store) {
+func logReady(cfg *config.Config, store *settings.Store, _ logview.Bound) {
 	slog.Info("NMonitor 启动", "version", version.Version, "addr", cfg.Addr(), "database", cfg.Database.Path, "workers", cfg.Scheduler.WorkerCount)
 	if store.UsingDefaultPassword() {
 		slog.Warn("正在使用默认管理员密码 admin，请尽快在系统配置中修改，或通过环境变量 NMONITOR_PASSWORD 设置")

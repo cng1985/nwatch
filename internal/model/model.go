@@ -8,9 +8,13 @@ import (
 )
 
 const (
-	TypeHTTP = "http"
-	TypeTLS  = "tls"
-	TypeTCP  = "tcp"
+	TypeHTTP   = "http"
+	TypeTLS    = "tls"
+	TypeTCP    = "tcp"
+	TypeCPU    = "cpu"
+	TypeMemory = "memory"
+	TypeDisk   = "disk"
+	TypeScript = "script"
 
 	StatusUnknown = "UNKNOWN"
 	StatusUp      = "UP"
@@ -64,6 +68,10 @@ type Monitor struct {
 	HeadersRaw string            `gorm:"column:headers;type:text" json:"-"`
 	Headers    map[string]string `gorm:"-" json:"headers"`
 	Body       string            `gorm:"type:text" json:"body"`
+	// Threshold 是 CPU、内存、磁盘使用率告警线，单位是百分比。
+	Threshold float64 `json:"threshold"`
+	Command   string  `gorm:"type:text" json:"command"`
+	WorkDir   string  `gorm:"size:1024" json:"workDir"`
 
 	Interval int    `gorm:"not null" json:"interval"`
 	Timeout  int    `gorm:"not null" json:"timeout"`
@@ -228,4 +236,44 @@ type Setting struct {
 	Key       string    `gorm:"primaryKey;size:64" json:"key"`
 	Value     string    `gorm:"type:text" json:"value"`
 	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// HostSample 是本机 CPU、内存、磁盘的一次采样。
+type HostSample struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	CPUPercent  float64   `json:"cpuPercent"`
+	MemPercent  float64   `json:"memPercent"`
+	MemTotal    uint64    `json:"memTotal"`
+	MemUsed     uint64    `json:"memUsed"`
+	SwapPercent float64   `json:"swapPercent"`
+	Load1       float64   `json:"load1"`
+	DiskPercent float64   `json:"diskPercent"`
+	DisksRaw    string    `gorm:"type:text" json:"-"`
+	SampledAt   time.Time `gorm:"index" json:"sampledAt"`
+}
+
+// ScriptRun 记录一次手动或定时脚本执行的输出。
+type ScriptRun struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	MonitorID    *uint     `gorm:"index" json:"monitorId"`
+	Name         string    `gorm:"size:128" json:"name"`
+	Command      string    `gorm:"type:text" json:"command"`
+	WorkDir      string    `gorm:"size:1024" json:"workDir"`
+	ExitCode     int       `json:"exitCode"`
+	Success      bool      `json:"success"`
+	Stdout       string    `gorm:"type:text" json:"stdout"`
+	Stderr       string    `gorm:"type:text" json:"stderr"`
+	ErrorMessage string    `gorm:"size:2048" json:"errorMessage"`
+	DurationMs   int       `json:"durationMs"`
+	StartedAt    time.Time `gorm:"index" json:"startedAt"`
+	FinishedAt   time.Time `json:"finishedAt"`
+}
+
+// AppLog 是进程日志，供管理台查看。
+type AppLog struct {
+	ID       uint      `gorm:"primaryKey" json:"id"`
+	Level    string    `gorm:"size:16;index" json:"level"`
+	Message  string    `gorm:"size:4000" json:"message"`
+	Attrs    string    `gorm:"size:2000" json:"attrs"`
+	LoggedAt time.Time `gorm:"index" json:"loggedAt"`
 }

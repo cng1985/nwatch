@@ -56,6 +56,9 @@ func Migrate(db *gorm.DB) error {
 		&model.MonitorCheck{},
 		&model.MonitorMetric{},
 		&model.Setting{},
+		&model.HostSample{},
+		&model.ScriptRun{},
+		&model.AppLog{},
 	); err != nil {
 		return err
 	}

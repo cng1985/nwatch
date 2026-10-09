@@ -21,6 +21,8 @@ import (
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/host"
+	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/metric"
 	"github.com/cng1985/nwatch/internal/model"
@@ -56,7 +58,13 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reg := checker.NewRegistry(checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker())
+	collector := host.NewCollector()
+	logs := logview.NewStore()
+	logs.Bind(db)
+	reg := checker.NewRegistry(
+		checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker(),
+		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(),
+	)
 	alerts := alert.NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
 	alerts.Start(1)
 	t.Cleanup(func() { alerts.Stop(context.Background()) })
@@ -70,7 +78,7 @@ func newTestServer(t *testing.T) *Server {
 	sched := scheduler.NewScheduler(time.Hour, db, pool, nil)
 	sched.Start()
 	t.Cleanup(sched.Stop)
-	return NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, nil)
+	return NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, collector, logs, nil)
 }
 
 func TestLoginAndMonitorCheckFlow(t *testing.T) {
@@ -270,6 +278,72 @@ func TestMailOnContinuedFailure(t *testing.T) {
 	}
 	if len(smtpSrv.Messages()) != 2 || !strings.Contains(smtpSrv.Messages()[1], "测试邮件") {
 		t.Fatalf("test body %#v", smtpSrv.Messages())
+	}
+}
+
+func TestHostScriptAndLogs(t *testing.T) {
+	s := newTestServer(t)
+	s.logs.Add("INFO", "采集完成", "kind=host")
+	token := login(t, s)
+
+	rec := do(t, s, http.MethodGet, "/api/host?range=1h", token, nil)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("cpuPercent")) {
+		t.Fatalf("host %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "磁盘根分区", "type": "disk", "host": "/", "threshold": 99,
+		"interval": 60, "timeout": 5, "failureThreshold": 1, "recoveryThreshold": 1,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("disk monitor %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/scripts/run", token, map[string]any{
+		"name": "探测", "command": "echo nmonitor-script-ok", "timeout": 5,
+	})
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("nmonitor-script-ok")) {
+		t.Fatalf("run %d %s", rec.Code, rec.Body.String())
+	}
+	var ran struct {
+		Data model.ScriptRun `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &ran); err != nil {
+		t.Fatal(err)
+	}
+	if !ran.Data.Success || ran.Data.ExitCode != 0 {
+		t.Fatalf("%+v", ran.Data)
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "脚本监控", "type": "script", "command": "echo scheduled-ok",
+		"interval": 60, "timeout": 5, "failureThreshold": 1, "recoveryThreshold": 1,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("script monitor %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Data model.Monitor `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	rec = do(t, s, http.MethodPost, "/api/monitors/"+strconv.FormatUint(uint64(created.Data.ID), 10)+"/check", token, nil)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("scheduled-ok")) {
+		t.Fatalf("check %d %s", rec.Code, rec.Body.String())
+	}
+
+	rec = do(t, s, http.MethodGet, "/api/scripts/runs?keyword=scheduled-ok", token, nil)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("scheduled-ok")) {
+		t.Fatalf("runs %d %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, s, http.MethodGet, "/api/logs?keyword=采集完成", token, nil)
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("采集完成")) {
+		t.Fatalf("logs %d %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, s, http.MethodPost, "/api/scripts/run", token, map[string]any{"command": ""})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty script %d", rec.Code)
 	}
 }
 

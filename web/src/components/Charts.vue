@@ -31,15 +31,18 @@ const props = defineProps({
   kind: { type: String, default: 'area' },
   points: { type: Array, default: () => [] },
   percent: { type: Number, default: 0 },
+  max: { type: Number, default: 0 },
+  unit: { type: String, default: 'ms' },
 })
 const ceiling = computed(() => {
+  if (props.max > 0) return props.max
   const peak = Math.max(1, ...props.points.map((p) => p.avg || 0))
   const steps = [100, 200, 300, 500, 800, 1000, 2000, 5000]
   return steps.find((step) => step >= peak * 1.15) || Math.ceil(peak / 1000) * 1000
 })
 const ticks = computed(() => [1, 2 / 3, 1 / 3].map((ratio) => ({
   y: 168 - ratio * 132,
-  text: Math.round(ceiling.value * ratio) + ' ms',
+  text: Math.round(ceiling.value * ratio) + (props.unit ? ' ' + props.unit : ''),
 })))
 const coords = computed(() => props.points.map((p, i) => {
   const x = props.points.length <= 1 ? 355 : 52 + (i / (props.points.length - 1)) * 600
@@ -70,7 +73,10 @@ const labels = computed(() => {
   return [...new Set(indexes)].map((i) => {
     const date = new Date(props.points[i].time)
     const hh = String(date.getHours()).padStart(2, '0')
-    const text = span > 36 * 3600000 ? `${date.getMonth() + 1}/${date.getDate()}` : `${hh}:00`
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    let text = `${hh}:00`
+    if (span > 36 * 3600000) text = `${date.getMonth() + 1}/${date.getDate()}`
+    else if (span < 6 * 3600000) text = `${hh}:${mm}`
     return { x: coords.value[i][0] - 14, text }
   })
 })

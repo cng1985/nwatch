@@ -7,6 +7,8 @@ import (
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/host"
+	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/maintenance"
 	"github.com/cng1985/nwatch/internal/metric"
@@ -22,6 +24,8 @@ var Module = fx.Options(
 	loggerModule,
 	config.Module,
 	database.Module,
+	logview.Module,
+	host.Module,
 	settings.Module,
 	checker.Module,
 	state.Module,

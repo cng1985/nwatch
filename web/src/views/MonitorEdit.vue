@@ -38,12 +38,27 @@
         <section class="card section">
           <h3><em>02</em> 检测配置</h3>
           <div class="form-grid">
-            <label v-if="form.kind !== 'tcp'" class="field full"><span class="req">目标 URL</span>
+            <label v-if="form.kind === 'http' || form.kind === 'https' || form.kind === 'tls'" class="field full"><span class="req">目标 URL</span>
               <input v-model="form.url" class="text" :placeholder="form.kind === 'tls' ? 'api.example.com' : 'https://erp.example.com/health'" />
             </label>
-            <template v-else>
+            <template v-else-if="form.kind === 'tcp'">
               <label class="field"><span class="req">主机</span><input v-model="form.host" class="text" placeholder="192.168.1.100" /></label>
               <label class="field"><span class="req">端口</span><input v-model.number="form.port" class="text" type="number" /></label>
+            </template>
+            <template v-else-if="form.kind === 'cpu' || form.kind === 'memory'">
+              <label class="field"><span class="req">使用率阈值</span><div class="unit"><input v-model.number="form.threshold" class="text" type="number" min="1" max="100" /><em>%</em></div></label>
+              <p class="full demo-note">使用率超过阈值时记为一次失败，连续失败达到下方次数后告警。</p>
+            </template>
+            <template v-else-if="form.kind === 'disk'">
+              <label class="field"><span class="req">磁盘路径</span><input v-model="form.host" class="text" placeholder="/" /></label>
+              <label class="field"><span class="req">使用率阈值</span><div class="unit"><input v-model.number="form.threshold" class="text" type="number" min="1" max="100" /><em>%</em></div></label>
+              <p class="full demo-note">按路径所在文件系统计算用量，根分区填 /。</p>
+            </template>
+            <template v-else-if="form.kind === 'script'">
+              <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="systemctl is-active nginx"></textarea></label>
+              <label class="field"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/opt/nmonitor" /></label>
+              <label class="field"><span>输出包含</span><input v-model="form.bodyContains" class="text" placeholder="active" /></label>
+              <p class="full demo-note">脚本在服务器上以 NMonitor 进程用户执行。退出码 0 视为成功。</p>
             </template>
             <label v-if="form.kind === 'http' || form.kind === 'https'" class="field"><span class="req">请求方法</span>
               <select v-model="form.method" class="select" style="width:100%"><option>GET</option><option>POST</option><option>HEAD</option></select>
@@ -125,6 +140,10 @@ const kinds = [
   { id: 'https', label: 'HTTPS', icon: 'lock' },
   { id: 'tcp', label: 'TCP 端口', icon: 'db' },
   { id: 'tls', label: 'HTTPS 证书', icon: 'file' },
+  { id: 'cpu', label: 'CPU', icon: 'cpu' },
+  { id: 'memory', label: '内存', icon: 'mem' },
+  { id: 'disk', label: '磁盘', icon: 'disk' },
+  { id: 'script', label: '脚本', icon: 'script' },
 ]
 const intervals = [[15, '15 秒'], [30, '30 秒'], [60, '60 秒'], [300, '5 分钟'], [600, '10 分钟'], [1800, '30 分钟'], [3600, '1 小时'], [43200, '12 小时'], [86400, '24 小时']]
 const form = reactive({
@@ -132,22 +151,32 @@ const form = reactive({
   expectedStatusCodes: '200', interval: 60, timeout: 5, failureThreshold: 3, recoveryThreshold: 1,
   bodyContains: '', bodyNotContains: '', followRedirects: true, tlsWarningDays: 14, tlsCriticalDays: 7,
   tlsNotifyDays: '30,14,7,3,1,0', notifierIds: [], enabled: true,
+  threshold: 90, command: '', workDir: '',
 })
 const currentKind = computed(() => kinds.find((item) => item.id === form.kind))
 const intervalLabel = computed(() => intervals.find((item) => item[0] === form.interval)?.[1] || form.interval + ' 秒')
-const previewTarget = computed(() => form.kind === 'tcp' ? (form.host ? `${form.host}:${form.port || ''}` : '未填写地址') : (form.url || '未填写地址'))
+const previewTarget = computed(() => {
+  if (form.kind === 'tcp') return form.host ? `${form.host}:${form.port || ''}` : '未填写地址'
+  if (form.kind === 'cpu') return `CPU 超过 ${form.threshold || 90}%`
+  if (form.kind === 'memory') return `内存超过 ${form.threshold || 90}%`
+  if (form.kind === 'disk') return `${form.host || '/'} 超过 ${form.threshold || 90}%`
+  if (form.kind === 'script') return (form.command || '').split('\n')[0] || '未填写脚本'
+  return form.url || '未填写地址'
+})
 
 function cancel() { router.push('/monitors') }
 
 async function save() {
   error.value = ''
   if (demoMode) { error.value = '演示模式不会写入服务器'; return }
-  const type = form.kind === 'tcp' ? 'tcp' : form.kind === 'tls' ? 'tls' : 'http'
+  const passthrough = ['tcp', 'tls', 'cpu', 'memory', 'disk', 'script']
+  const type = passthrough.includes(form.kind) ? form.kind : 'http'
   let url = (form.url || '').trim()
   if (form.kind === 'https' && url && !/^https?:\/\//.test(url)) url = 'https://' + url
   if (form.kind === 'http' && url && !/^https?:\/\//.test(url)) url = 'http://' + url
   const payload = {
     ...form, type, url, groupId: form.groupId || null,
+    host: form.kind === 'disk' ? (form.host || '/') : form.host,
     headers: {},
   }
   saving.value = true
@@ -168,7 +197,7 @@ onMounted(async () => {
     groups.value = demoGroups
     const row = editing.value ? presentDemo().overview.find((item) => String(item.id) === String(route.params.id)) : null
     if (row) {
-      const kind = row.type === 'tcp' ? 'tcp' : row.type === 'tls' ? 'tls' : (row.url || '').startsWith('https') ? 'https' : 'http'
+      const kind = kindOf(row)
       Object.assign(form, row, { kind, groupId: row.groupId || null, notifierIds: [1, 2] })
     } else if (!editing.value) {
       Object.assign(form, { name: 'ERP API', groupId: 1, kind: 'https', url: 'https://erp.example.com/health', notifierIds: [1, 2] })
@@ -178,7 +207,12 @@ onMounted(async () => {
   groups.value = await api('/api/groups')
   if (!editing.value) return
   const row = await api('/api/monitors/' + route.params.id)
-  const kind = row.type === 'tcp' ? 'tcp' : row.type === 'tls' ? 'tls' : (row.url || '').startsWith('https') ? 'https' : 'http'
+  const kind = kindOf(row)
   Object.assign(form, row, { kind, notifierIds: row.notifierIds || [] })
 })
+
+function kindOf(row) {
+  if (['tcp', 'tls', 'cpu', 'memory', 'disk', 'script'].includes(row.type)) return row.type
+  return (row.url || '').startsWith('https') ? 'https' : 'http'
+}
 </script>

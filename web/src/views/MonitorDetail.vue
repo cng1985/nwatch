@@ -14,7 +14,7 @@
     </div>
     <p v-if="message" class="demo-note" style="margin-bottom:12px">{{ message }}</p>
     <div class="card stats">
-      <div class="stat"><div class="label">最近响应</div><div class="value">{{ monitor.lastResponseTime || 0 }}<span style="font-size:14px"> ms</span></div></div>
+      <div class="stat"><div class="label">{{ resourceLike ? '最近结果' : '最近响应' }}</div><div class="value" :style="resourceLike ? 'font-size:16px' : ''">{{ resourceLike ? (monitor.lastMessage || '-') : (monitor.lastResponseTime || 0) }}<span v-if="!resourceLike" style="font-size:14px"> ms</span></div></div>
       <div class="stat"><div class="label">连续失败</div><div class="value">{{ monitor.consecutiveFailures || 0 }}</div></div>
       <div class="stat"><div class="label">24 小时可用率</div><div class="value" style="font-size:28px">{{ avail }}</div></div>
       <div class="stat"><div class="label">最近检测</div><div class="value" style="font-size:18px">{{ relative(monitor.lastCheckAt) }}</div></div>
@@ -44,7 +44,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
@@ -59,6 +59,7 @@ const points = ref([])
 const avail = ref('-')
 const range = ref('24h')
 const message = ref('')
+const resourceLike = computed(() => ['cpu', 'memory', 'disk', 'script'].includes(monitor.value?.type))
 
 async function load() {
   if (isDemo()) {

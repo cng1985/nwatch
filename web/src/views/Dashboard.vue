@@ -20,6 +20,27 @@
       <router-link to="/events">查看告警 →</router-link>
     </div>
 
+    <div class="meters" v-if="host.cpuPercent !== undefined">
+      <router-link class="card meter" to="/resources">
+        <div class="label"><Icon name="cpu" /> CPU</div>
+        <div class="value">{{ host.cpuPercent.toFixed(1) }}<small>%</small></div>
+        <div class="meta">负载 {{ host.load1?.toFixed?.(1) || host.load1 || 0 }}</div>
+        <span class="bar" :class="tone(host.cpuPercent)"><i :style="{ width: host.cpuPercent + '%' }"></i></span>
+      </router-link>
+      <router-link class="card meter" to="/resources">
+        <div class="label"><Icon name="mem" /> 内存</div>
+        <div class="value">{{ host.memPercent.toFixed(1) }}<small>%</small></div>
+        <div class="meta">{{ bytes(host.memUsed) }} / {{ bytes(host.memTotal) }}</div>
+        <span class="bar" :class="tone(host.memPercent)"><i :style="{ width: host.memPercent + '%' }"></i></span>
+      </router-link>
+      <router-link class="card meter" to="/resources">
+        <div class="label"><Icon name="disk" /> 磁盘</div>
+        <div class="value">{{ host.diskPercent.toFixed(1) }}<small>%</small></div>
+        <div class="meta">{{ host.diskPath || '/' }}</div>
+        <span class="bar" :class="tone(host.diskPercent)"><i :style="{ width: host.diskPercent + '%' }"></i></span>
+      </router-link>
+    </div>
+
     <div class="card stats">
       <div class="stat"><div class="label">监控总数</div><div class="value">{{ data.total || 0 }}<span v-if="data.addedSinceYesterday" class="delta">+{{ data.addedSinceYesterday }} 较昨日</span></div></div>
       <div class="stat"><div class="label"><i class="mark green"></i>正常运行</div><div class="value">{{ data.up || 0 }}</div></div>
@@ -93,9 +114,10 @@ import Icon from '../components/Icon.vue'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
 import { demoGroups, demoTrend, presentDemo } from '../demo'
-import { isDemo, joinNames, relative, statusLabel, targetOf } from '../format'
+import { bytes, iconOf, isDemo, joinNames, relative, statusLabel, targetOf } from '../format'
 
 const data = reactive({ trend: { points: [] }, problems: [], overview: [] })
+const host = reactive({})
 const groups = ref([])
 const groupId = ref('')
 const range = ref('24h')
@@ -114,11 +136,23 @@ const deltaText = computed(() => {
 const deltaClass = computed(() => (data.trend?.delta || 0) <= 0 ? 'down-good' : 'up-bad')
 function commas(value) { return Number(value || 0).toLocaleString('en-US') }
 
-function iconOf(row) {
-  if (row.type === 'tcp') return 'db'
-  if (row.type === 'tls') return 'cert'
-  if ((row.url || '').startsWith('https')) return 'lock'
-  return 'globe'
+function tone(value) {
+  if (value >= 90) return 'bad'
+  if (value >= 70) return 'warn'
+  return ''
+}
+function applyHost(current) {
+  const disks = current?.disks || []
+  const root = disks.find((item) => item.path === '/') || disks[0] || {}
+  Object.assign(host, {
+    cpuPercent: current.cpuPercent || 0,
+    memPercent: current.memPercent || 0,
+    memUsed: current.memUsed || 0,
+    memTotal: current.memTotal || 0,
+    load1: current.load1 || 0,
+    diskPercent: root.percent || 0,
+    diskPath: root.path || '/',
+  })
 }
 
 async function load() {
@@ -126,11 +160,16 @@ async function load() {
     const demo = presentDemo()
     Object.assign(data, { ...demo, trend: range.value === '24h' ? demo.trend : demoTrend(range.value) })
     groups.value = demoGroups
+    applyHost({ cpuPercent: 18.4, memPercent: 46.2, memUsed: 7.4e9, memTotal: 16e9, load1: 0.42, disks: [{ path: '/', percent: 61 }] })
     return
   }
   const dash = await api('/api/dashboard?range=' + range.value)
   Object.assign(data, dash)
   groups.value = await api('/api/groups')
+  try {
+    const resources = await api('/api/host?range=1h')
+    applyHost(resources.current || {})
+  } catch { /* 主机采样失败时总览仍可用 */ }
 }
 function changeRange(next) { range.value = next; load() }
 onMounted(load)
