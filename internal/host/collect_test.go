@@ -1,6 +1,8 @@
 package host
 
 import (
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -23,11 +25,11 @@ func TestSnapshotReadsLocalResources(t *testing.T) {
 		if disk.Total == 0 || disk.Percent < 0 || disk.Percent > 100 {
 			t.Fatalf("disk %+v", disk)
 		}
-		if disk.Path == "/" {
+		if disk.Path == "/" || strings.HasSuffix(disk.Path, `:\`) {
 			foundRoot = true
 		}
 	}
-	if !foundRoot {
+	if runtime.GOOS == "linux" && !foundRoot {
 		t.Fatalf("missing root: %+v", snap.Disks)
 	}
 	second, err := NewCollector().Snapshot()
@@ -40,11 +42,12 @@ func TestSnapshotReadsLocalResources(t *testing.T) {
 }
 
 func TestUsageOfRoot(t *testing.T) {
-	disk, err := Usage("/")
+	root := DefaultDiskPath()
+	disk, err := Usage(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if disk.Path != "/" || disk.Total == 0 {
+	if disk.Path != root || disk.Total == 0 {
 		t.Fatalf("%+v", disk)
 	}
 	if _, err := Usage("/this/path/does/not/exist"); err == nil {

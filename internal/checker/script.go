@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -64,7 +63,7 @@ type Output struct {
 	Err      string
 }
 
-// Execute 用 sh -c 执行命令，到时会结束整个进程组。
+// Execute 用系统 shell 执行命令。Linux 上到时会结束整个进程组，Windows 上通过 cmd /C 执行。
 func Execute(ctx context.Context, command, workDir string, timeout time.Duration) Output {
 	command = strings.TrimSpace(command)
 	workDir = strings.TrimSpace(workDir)
@@ -83,16 +82,7 @@ func Execute(ctx context.Context, command, workDir string, timeout time.Duration
 	start := time.Now()
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
-	cmd.Dir = workDir
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	cmd.WaitDelay = time.Second
+	cmd := startScript(runCtx, command, workDir)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &limitWriter{buf: &stdout, max: maxScriptOutput}
 	cmd.Stderr = &limitWriter{buf: &stderr, max: maxScriptOutput}

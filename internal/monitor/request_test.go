@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -16,7 +17,13 @@ func TestNormalizeResourceAndScript(t *testing.T) {
 	if err := disk.Normalize(60, 5); err == nil {
 		t.Fatal("relative disk path")
 	}
-	disk.Host = "/var"
+	absDisk := "/var"
+	absWork := "/tmp"
+	if runtime.GOOS == "windows" {
+		absDisk = `C:\`
+		absWork = `C:\nmonitor`
+	}
+	disk.Host = absDisk
 	disk.Threshold = 80
 	if err := disk.Normalize(60, 5); err != nil {
 		t.Fatal(err)
@@ -25,13 +32,13 @@ func TestNormalizeResourceAndScript(t *testing.T) {
 	if err := script.Normalize(60, 5); err == nil {
 		t.Fatal("relative workdir")
 	}
-	script.WorkDir = "/tmp"
+	script.WorkDir = absWork
 	if err := script.Normalize(60, 5); err != nil {
 		t.Fatal(err)
 	}
 	var saved model.Monitor
 	script.Apply(&saved)
-	if saved.Command != "echo ok" || saved.WorkDir != "/tmp" {
+	if saved.Command != "echo ok" || saved.WorkDir != absWork {
 		t.Fatalf("%+v", saved)
 	}
 	if err := (&Request{Name: "x", Type: "ping", Interval: 30, Timeout: 5}).Normalize(60, 5); err == nil || !strings.Contains(err.Error(), "script") {
