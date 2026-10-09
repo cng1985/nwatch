@@ -1,0 +1,12 @@
+nmonitor
+*.exe
+data/*.db
+data/*.db-*
+data/backups/
+data/jwt.secret
+web/node_modules/
+web/dist/
+.DS_Store
+*.log
+.env
+nmonitor.env

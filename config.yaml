@@ -1,0 +1,33 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+
+database:
+  path: ./data/nmonitor.db
+
+scheduler:
+  worker_count: 20
+  scan_interval: 1s
+  queue_size: 200
+
+monitor:
+  default_timeout: 5s
+  default_interval: 60s
+
+history:
+  check_retention_days: 7
+  event_retention_days: 365
+  metric_retention_days: 90
+  hour_metric_retention_days: 730
+
+security:
+  username: admin
+
+log:
+  level: info
+
+backup:
+  enabled: true
+  dir: ./data/backups
+  retention_days: 7
+  hour: 3

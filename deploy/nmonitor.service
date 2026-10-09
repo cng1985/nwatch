@@ -1,0 +1,16 @@
+[Unit]
+Description=NMonitor lightweight service monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nmonitor
+ExecStart=/opt/nmonitor/nmonitor
+EnvironmentFile=-/opt/nmonitor/nmonitor.env
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
