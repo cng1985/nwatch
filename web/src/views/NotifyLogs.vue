@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="page-head"><div><h1>通知日志</h1><p>每次发送都会留下结果，方便核对钉钉和企业微信的返回。</p></div></div>
+    <div class="page-head"><div><h1>通知日志</h1><p>每次发送都会留下结果，方便核对钉钉、企业微信和邮件的返回。</p></div></div>
     <div class="card table-wrap">
       <table>
         <thead><tr><th>时间</th><th>渠道</th><th>事件</th><th>结果</th><th>错误</th></tr></thead>

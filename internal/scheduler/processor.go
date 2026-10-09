@@ -9,6 +9,7 @@ import (
 
 	"github.com/cng1985/nwatch/internal/alert"
 	"github.com/cng1985/nwatch/internal/checker"
+	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/metric"
 	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/settings"
@@ -29,10 +30,11 @@ type Processor struct {
 	alerts   *alert.Manager
 	metrics  *metric.Aggregator
 	settings *settings.Store
+	mail     *mailer.Service
 }
 
-func NewProcessor(db *gorm.DB, checkers *checker.Registry, engine *state.Engine, alerts *alert.Manager, metrics *metric.Aggregator, store *settings.Store) *Processor {
-	return &Processor{db: db, checkers: checkers, engine: engine, alerts: alerts, metrics: metrics, settings: store}
+func NewProcessor(db *gorm.DB, checkers *checker.Registry, engine *state.Engine, alerts *alert.Manager, metrics *metric.Aggregator, store *settings.Store, mail *mailer.Service) *Processor {
+	return &Processor{db: db, checkers: checkers, engine: engine, alerts: alerts, metrics: metrics, settings: store, mail: mail}
 }
 
 func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Outcome, error) {
@@ -180,11 +182,58 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 	for _, ev := range saved {
 		p.alerts.Fanout(m.ID, ev)
 	}
+	p.notifyMail(ctx, &m, result, decision, saved)
 	var fresh model.Monitor
 	if err := p.db.Preload("Group").Preload("Notifiers").First(&fresh, m.ID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 	return &Outcome{Monitor: &fresh, Result: result, Events: saved}, nil
+}
+
+func (p *Processor) notifyMail(ctx context.Context, m *model.Monitor, result *checker.Result, decision state.Decision, saved []model.AlertEvent) {
+	if p.mail == nil || m == nil || result == nil {
+		return
+	}
+	freshFailure := false
+	for _, ev := range saved {
+		p.mail.Notify(ctx, mailer.Notice{Event: ev, Failures: decision.Failures})
+		if ev.EventType == model.EventDown || ev.EventType == model.EventTLSExpire || ev.EventType == model.EventTLSInvalid || ev.EventType == model.EventTLSCrit || ev.EventType == model.EventTLSWarn {
+			freshFailure = true
+		}
+	}
+	// 已经处于异常时，后续每一次失败都再发一封，直到恢复。
+	if result.Success || decision.Status != model.StatusDown || freshFailure {
+		return
+	}
+	var duration int64
+	if m.IncidentStartedAt != nil {
+		duration = int64(result.CheckedAt.Sub(*m.IncidentStartedAt).Seconds())
+		if duration < 0 {
+			duration = 0
+		}
+	}
+	ev := model.AlertEvent{
+		MonitorID:    m.ID,
+		MonitorName:  m.Name,
+		MonitorType:  m.Type,
+		EventType:    model.EventDown,
+		OldStatus:    model.StatusDown,
+		NewStatus:    model.StatusDown,
+		Target:       checker.FormatTarget(m),
+		Message:      clip(result.Message, 2000),
+		ResponseTime: result.ResponseTime,
+		OccurredAt:   result.CheckedAt,
+		Duration:     duration,
+	}
+	if m.CertNotAfter != nil {
+		expire := *m.CertNotAfter
+		ev.CertExpireAt = &expire
+	}
+	if m.CertDaysRemaining != nil {
+		days := *m.CertDaysRemaining
+		ev.CertDaysLeft = &days
+	}
+	p.mail.Notify(ctx, mailer.Notice{Event: ev, Failures: decision.Failures, Ongoing: true})
 }
 
 func clip(s string, n int) string {

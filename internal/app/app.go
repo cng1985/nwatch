@@ -12,6 +12,7 @@ import (
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/maintenance"
 	"github.com/cng1985/nwatch/internal/metric"
 	"github.com/cng1985/nwatch/internal/notifier"
@@ -40,6 +41,7 @@ func New() *fx.App {
 			notifier.NewWeCom,
 			notifier.NewWebhook,
 			notifier.NewRegistry,
+			mailer.New,
 			alert.NewManager,
 			metric.NewAggregator,
 			scheduler.NewProcessor,

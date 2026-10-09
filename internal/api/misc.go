@@ -213,6 +213,7 @@ func (s *Server) getSettings(c *gin.Context) {
 		"usingDefaultPassword":    s.settings.UsingDefaultPassword(),
 		"version":                 version.Version,
 		"database":                s.cfg.Database.Path,
+		"mail":                    mailView(s.settings.SMTP()),
 	})
 }
 
