@@ -115,7 +115,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
-import { demoDashboard, demoGroups, demoNotifiers } from '../demo'
+import { demoGroups, demoNotifiers, presentDemo } from '../demo'
 import { isDemo } from '../format'
 
 const route = useRoute()
@@ -174,7 +174,7 @@ onMounted(async () => {
   if (demoMode) {
     groups.value = demoGroups
     notifiers.value = demoNotifiers
-    const row = editing.value ? demoDashboard.overview.find((item) => String(item.id) === String(route.params.id)) : null
+    const row = editing.value ? presentDemo().overview.find((item) => String(item.id) === String(route.params.id)) : null
     if (row) {
       const kind = row.type === 'tcp' ? 'tcp' : row.type === 'tls' ? 'tls' : (row.url || '').startsWith('https') ? 'https' : 'http'
       Object.assign(form, row, { kind, groupId: row.groupId || null, notifierIds: [1, 2] })

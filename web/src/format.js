@@ -70,11 +70,10 @@ export function relative(value) {
   if (!value) return '-'
   const diff = (Date.now() - new Date(value).getTime()) / 1000
   if (Number.isNaN(diff)) return '-'
-  if (diff < 10) return '刚刚'
-  if (diff < 60) return Math.floor(diff) + ' 秒前'
-  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前'
-  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前'
-  return Math.floor(diff / 86400) + ' 天前'
+  if (diff < 60) return Math.max(1, Math.floor(diff)) + '秒前'
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前'
+  if (diff < 86400) return Math.floor(diff / 3600) + '小时前'
+  return Math.floor(diff / 86400) + '天前'
 }
 
 export function clock(value) {
