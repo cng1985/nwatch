@@ -49,7 +49,7 @@ import { useRoute } from 'vue-router'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
 import { clock, eventText, isDemo, percent, relative, statusLabel, targetOf } from '../format'
-import { demoDashboard, demoEvents } from '../demo'
+import { demoEvents, presentDemo } from '../demo'
 
 const route = useRoute()
 const monitor = ref(null)
@@ -62,8 +62,9 @@ const message = ref('')
 
 async function load() {
   if (isDemo()) {
-    monitor.value = demoDashboard.overview.find((item) => String(item.id) === String(route.params.id)) || demoDashboard.overview[0]
-    points.value = demoDashboard.trend.points
+    const demo = presentDemo()
+    monitor.value = demo.overview.find((item) => String(item.id) === String(route.params.id)) || demo.overview[0]
+    points.value = demo.trend.points
     events.value = demoEvents.filter((item) => item.monitorName === monitor.value.name)
     avail.value = monitor.value.hasAvailability ? Number(monitor.value.availability24h).toFixed(2) + '%' : '-'
     message.value = '演示数据，不会请求服务器。'
