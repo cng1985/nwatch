@@ -68,7 +68,7 @@ func Format(n Notice, loc *time.Location) (string, string) {
 	}
 	lines = append(lines, "时间："+stamp)
 	if isFailure(ev.EventType) || n.Ongoing {
-		lines = append(lines, "", "服务一直异常时，每次检测失败都会再次发送。如果某一封发送失败，系统会持续重试，直到发送成功。")
+		lines = append(lines, "", "失败后 15 秒通知一次，45 秒再通知一次，之后每 1 分钟通知一次，直到服务恢复。如果某一封发送失败，系统会持续重试，直到发送成功。")
 	}
 	return subject, strings.Join(lines, "\n")
 }

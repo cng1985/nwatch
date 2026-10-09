@@ -39,7 +39,7 @@
     </div>
     <form class="card section" @submit.prevent="saveMail">
       <h3>邮件服务器</h3>
-      <p class="demo-note" style="margin:-6px 0 14px">监控连续失败达到阈值后发送邮件。服务一直异常时，每次检测失败都会再发一封；某一封发送失败会持续重试，直到成功。</p>
+      <p class="demo-note" style="margin:-6px 0 14px">监控连续失败达到阈值后开始通知。15 秒通知一次，45 秒再通知一次，之后每 1 分钟通知一次，直到服务恢复。邮件发送失败会持续重试，直到成功。</p>
       <div class="form-grid">
         <label class="check full"><input v-model="mail.enabled" type="checkbox" /> 启用邮件通知</label>
         <label class="field"><span>SMTP 主机</span><input v-model="mail.host" class="text" placeholder="smtp.example.com" /></label>

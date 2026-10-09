@@ -100,6 +100,9 @@ type Monitor struct {
 	LastMessage       string     `gorm:"size:2048" json:"lastMessage"`
 	LastStatusCode    int        `json:"lastStatusCode"`
 	IncidentStartedAt *time.Time `json:"incidentStartedAt"`
+	// NextNotifyAt / NotifyStage 记录故障期间的下一次通知。0 是 15 秒，1 是 45 秒，之后每分钟一档。
+	NextNotifyAt *time.Time `gorm:"index" json:"-"`
+	NotifyStage  int        `json:"-"`
 
 	ConsecutiveFailures  int `json:"consecutiveFailures"`
 	ConsecutiveSuccesses int `json:"consecutiveSuccesses"`

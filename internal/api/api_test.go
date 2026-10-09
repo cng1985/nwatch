@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -195,7 +196,12 @@ func TestMailOnContinuedFailure(t *testing.T) {
 		t.Fatalf("settings %d %s", rec.Code, rec.Body.String())
 	}
 
+	var failing atomic.Bool
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failing.Load() {
+			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer upstream.Close()
@@ -216,7 +222,7 @@ func TestMailOnContinuedFailure(t *testing.T) {
 	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
 		t.Fatalf("up check %d %s", rec.Code, rec.Body.String())
 	}
-	upstream.Close()
+	failing.Store(true)
 	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
 		t.Fatalf("first failure %d %s", rec.Code, rec.Body.String())
 	}
@@ -226,18 +232,33 @@ func TestMailOnContinuedFailure(t *testing.T) {
 	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
 		t.Fatalf("second failure %d %s", rec.Code, rec.Body.String())
 	}
-	if len(smtpSrv.Messages()) != 1 || strings.Contains(smtpSrv.Messages()[0], "仍然异常") {
-		t.Fatalf("expected first alert, got %#v", smtpSrv.Messages())
+	var downed struct {
+		Data struct {
+			Monitor model.Monitor `json:"monitor"`
+		} `json:"data"`
 	}
-	if !strings.Contains(smtpSrv.Messages()[0], "服务异常") || !strings.Contains(smtpSrv.Messages()[0], "邮件探针") {
-		t.Fatalf("alert body %#v", smtpSrv.Messages()[0])
+	if err := json.Unmarshal(rec.Body.Bytes(), &downed); err != nil {
+		t.Fatal(err)
+	}
+	if downed.Data.Monitor.Status != model.StatusDown || downed.Data.Monitor.IncidentStartedAt == nil {
+		t.Fatalf("expected incident, status=%s", downed.Data.Monitor.Status)
+	}
+	if len(smtpSrv.Messages()) != 0 {
+		t.Fatalf("down should wait for the 15s notice, got %#v", smtpSrv.Messages())
 	}
 	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
 		t.Fatalf("third failure %d %s", rec.Code, rec.Body.String())
 	}
-	msgs := smtpSrv.Messages()
-	if len(msgs) != 2 || !strings.Contains(msgs[1], "服务仍然异常") {
-		t.Fatalf("expected repeat mail, got %#v", msgs)
+	if len(smtpSrv.Messages()) != 0 {
+		t.Fatalf("continued failure should not mail on every check, got %#v", smtpSrv.Messages())
+	}
+
+	failing.Store(false)
+	if rec = do(t, s, http.MethodPost, check, token, nil); rec.Code != 200 {
+		t.Fatalf("recovery %d %s", rec.Code, rec.Body.String())
+	}
+	if len(smtpSrv.Messages()) != 1 || !strings.Contains(smtpSrv.Messages()[0], "服务已恢复") || !strings.Contains(smtpSrv.Messages()[0], "邮件探针") {
+		t.Fatalf("recovery mail %#v", smtpSrv.Messages())
 	}
 
 	rec = do(t, s, http.MethodPost, "/api/settings/mail/test", token, map[string]any{
@@ -247,7 +268,7 @@ func TestMailOnContinuedFailure(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("test mail %d %s", rec.Code, rec.Body.String())
 	}
-	if len(smtpSrv.Messages()) != 3 || !strings.Contains(smtpSrv.Messages()[2], "测试邮件") {
+	if len(smtpSrv.Messages()) != 2 || !strings.Contains(smtpSrv.Messages()[1], "测试邮件") {
 		t.Fatalf("test body %#v", smtpSrv.Messages())
 	}
 }
