@@ -94,8 +94,12 @@ func markdown(event *model.AlertEvent, loc *time.Location) string {
 			"**时间：** " + when,
 		}, "\n")
 	default:
-		return strings.Join([]string{
-			"### 🔴 服务异常",
+		status := event.NewStatus
+		if event.OldStatus != "" && event.OldStatus != event.NewStatus {
+			status = event.OldStatus + " → " + event.NewStatus
+		}
+		lines := []string{
+			"### 🔴 " + failureHeadline(event),
 			"",
 			"**应用：** " + event.MonitorName,
 			"",
@@ -103,15 +107,29 @@ func markdown(event *model.AlertEvent, loc *time.Location) string {
 			"",
 			"**地址：** " + event.Target,
 			"",
-			"**状态：** " + event.OldStatus + " → " + event.NewStatus,
+			"**状态：** " + status,
 			"",
 			"**错误：** " + event.Message,
+		}
+		if event.Duration > 0 {
+			lines = append(lines, "", "**故障持续：** "+FormatDuration(event.Duration))
+		}
+		lines = append(lines,
 			"",
-			"**响应时间：** " + fmt.Sprintf("%d ms", event.ResponseTime),
+			"**响应时间：** "+fmt.Sprintf("%d ms", event.ResponseTime),
 			"",
-			"**时间：** " + when,
-		}, "\n")
+			"**时间：** "+when,
+		)
+		return strings.Join(lines, "\n")
 	}
+}
+
+// 第二次及以后的故障提醒落在 45 秒及之后，标题改为“仍然异常”。
+func failureHeadline(event *model.AlertEvent) string {
+	if event != nil && event.EventType == model.EventDown && event.OldStatus == event.NewStatus && event.Duration >= 45 {
+		return "服务仍然异常"
+	}
+	return "服务异常"
 }
 
 func titleOf(event *model.AlertEvent) string {
@@ -131,6 +149,6 @@ func titleOf(event *model.AlertEvent) string {
 	case model.EventTLSInvalid:
 		return "证书无效"
 	default:
-		return "服务异常"
+		return failureHeadline(event)
 	}
 }

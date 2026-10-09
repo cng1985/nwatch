@@ -38,7 +38,7 @@ func TestFormatOngoing(t *testing.T) {
 			Message: "timeout", OccurredAt: time.Now(),
 		},
 	}, time.Local)
-	if subject != "服务仍然异常 ERP" || !strings.Contains(body, "连续失败：4 次") || !strings.Contains(body, "持续重试") {
+	if subject != "服务仍然异常 ERP" || !strings.Contains(body, "连续失败：4 次") || !strings.Contains(body, "15 秒") || !strings.Contains(body, "持续重试") {
 		t.Fatalf("subject %s body %s", subject, body)
 	}
 }

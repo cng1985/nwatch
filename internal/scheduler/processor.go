@@ -100,9 +100,13 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 		}
 		if decision.IncidentStartedAt != nil {
 			updates["incident_started_at"] = *decision.IncidentStartedAt
+			updates["notify_stage"] = 0
+			updates["next_notify_at"] = decision.IncidentStartedAt.Add(alert.DueOffset(0))
 		}
 		if decision.ClearIncident {
 			updates["incident_started_at"] = gorm.Expr("NULL")
+			updates["next_notify_at"] = gorm.Expr("NULL")
+			updates["notify_stage"] = 0
 		}
 		if decision.UpdateCert && decision.Cert != nil {
 			cert := decision.Cert
@@ -179,10 +183,7 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 		slog.Error("保存检查结果失败", "monitor", m.Name, "err", err.Error())
 		return nil, err
 	}
-	for _, ev := range saved {
-		p.alerts.Fanout(m.ID, ev)
-	}
-	p.notifyMail(ctx, &m, result, decision, saved)
+	p.dispatchEvents(ctx, &m, decision, saved)
 	var fresh model.Monitor
 	if err := p.db.Preload("Group").Preload("Notifiers").First(&fresh, m.ID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -190,50 +191,19 @@ func (p *Processor) Process(ctx context.Context, id uint, reschedule bool) (*Out
 	return &Outcome{Monitor: &fresh, Result: result, Events: saved}, nil
 }
 
-func (p *Processor) notifyMail(ctx context.Context, m *model.Monitor, result *checker.Result, decision state.Decision, saved []model.AlertEvent) {
-	if p.mail == nil || m == nil || result == nil {
-		return
-	}
-	freshFailure := false
+// 故障通知改由提醒器按 15 秒、45 秒、之后每分钟发送。恢复和仍为正常时的证书提醒立即发送。
+func (p *Processor) dispatchEvents(ctx context.Context, m *model.Monitor, decision state.Decision, saved []model.AlertEvent) {
 	for _, ev := range saved {
-		p.mail.Notify(ctx, mailer.Notice{Event: ev, Failures: decision.Failures})
-		if ev.EventType == model.EventDown || ev.EventType == model.EventTLSExpire || ev.EventType == model.EventTLSInvalid || ev.EventType == model.EventTLSCrit || ev.EventType == model.EventTLSWarn {
-			freshFailure = true
+		if decision.Status == model.StatusDown && ev.EventType != model.EventRecovered && ev.EventType != model.EventTLSRecover {
+			continue
+		}
+		if p.alerts != nil {
+			p.alerts.Fanout(m.ID, ev)
+		}
+		if p.mail != nil {
+			p.mail.Notify(ctx, mailer.Notice{Event: ev, Failures: decision.Failures})
 		}
 	}
-	// 已经处于异常时，后续每一次失败都再发一封，直到恢复。
-	if result.Success || decision.Status != model.StatusDown || freshFailure {
-		return
-	}
-	var duration int64
-	if m.IncidentStartedAt != nil {
-		duration = int64(result.CheckedAt.Sub(*m.IncidentStartedAt).Seconds())
-		if duration < 0 {
-			duration = 0
-		}
-	}
-	ev := model.AlertEvent{
-		MonitorID:    m.ID,
-		MonitorName:  m.Name,
-		MonitorType:  m.Type,
-		EventType:    model.EventDown,
-		OldStatus:    model.StatusDown,
-		NewStatus:    model.StatusDown,
-		Target:       checker.FormatTarget(m),
-		Message:      clip(result.Message, 2000),
-		ResponseTime: result.ResponseTime,
-		OccurredAt:   result.CheckedAt,
-		Duration:     duration,
-	}
-	if m.CertNotAfter != nil {
-		expire := *m.CertNotAfter
-		ev.CertExpireAt = &expire
-	}
-	if m.CertDaysRemaining != nil {
-		days := *m.CertDaysRemaining
-		ev.CertDaysLeft = &days
-	}
-	p.mail.Notify(ctx, mailer.Notice{Event: ev, Failures: decision.Failures, Ongoing: true})
 }
 
 func clip(s string, n int) string {
