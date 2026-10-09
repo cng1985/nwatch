@@ -73,7 +73,7 @@ func (c *DiskChecker) Type() string { return model.TypeDisk }
 func (c *DiskChecker) Check(ctx context.Context, m *model.Monitor) (*Result, error) {
 	path := m.Host
 	if path == "" {
-		path = "/"
+		path = host.DefaultDiskPath()
 	}
 	start := time.Now()
 	disk, err := host.Usage(path)
