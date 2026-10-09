@@ -1,5 +1,15 @@
 const wave = [96, 102, 118, 140, 188, 230, 210, 176, 150, 132, 128, 146, 210, 168, 142, 130, 118, 124, 112, 108, 102, 98, 94, 90]
 
+function atHour(index) {
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  return new Date(start.getTime() + index * 3600000).toISOString()
+}
+
+function ago(seconds) {
+  return new Date(Date.now() - seconds * 1000).toISOString()
+}
+
 export const demoDashboard = {
   total: 32,
   up: 28,
@@ -17,11 +27,11 @@ export const demoDashboard = {
     { id: 'file', name: '文件服务' },
   ],
   overview: [
-    { id: 'erp', name: 'ERP API', type: 'http', url: 'https://erp.example.com/health', status: 'DOWN', groupId: 1, lastResponseTime: 5000, availability24h: 98.62, hasAvailability: true, lastCheckAt: new Date(Date.now() - 10000).toISOString() },
-    { id: 'pay', name: '支付网关', type: 'http', url: 'https://pay.example.com/health', status: 'DOWN', groupId: 1, lastResponseTime: 5000, availability24h: 99.12, hasAvailability: true, lastCheckAt: new Date(Date.now() - 12000).toISOString() },
-    { id: 'web', name: '官网', type: 'http', url: 'https://www.example.com', status: 'UP', groupId: 1, lastResponseTime: 86, availability24h: 100, hasAvailability: true, lastCheckAt: new Date(Date.now() - 8000).toISOString() },
-    { id: 'scm', name: 'SCM API', type: 'http', url: 'https://scm.example.com/health', status: 'UP', groupId: 1, lastResponseTime: 42, availability24h: 100, hasAvailability: true, lastCheckAt: new Date(Date.now() - 15000).toISOString() },
-    { id: 'mysql', name: 'MySQL 生产库', type: 'tcp', host: '192.168.1.100', port: 3306, status: 'UP', groupId: 3, lastResponseTime: 12, availability24h: 100, hasAvailability: true, lastCheckAt: new Date(Date.now() - 6000).toISOString() },
+    { id: 'erp', name: 'ERP API', type: 'http', url: 'https://erp.example.com/health', status: 'DOWN', groupId: 1, lastResponseTime: 5000, availability24h: 98.62, hasAvailability: true, ago: 10 },
+    { id: 'pay', name: '支付网关', type: 'http', url: 'https://pay.example.com/health', status: 'DOWN', groupId: 1, lastResponseTime: 5000, availability24h: 99.12, hasAvailability: true, ago: 12 },
+    { id: 'web', name: '官网', type: 'http', url: 'https://www.example.com', status: 'UP', groupId: 1, lastResponseTime: 86, availability24h: 100, hasAvailability: true, ago: 8 },
+    { id: 'scm', name: 'SCM API', type: 'http', url: 'https://scm.example.com/health', status: 'UP', groupId: 1, lastResponseTime: 42, availability24h: 100, hasAvailability: true, ago: 15 },
+    { id: 'mysql', name: 'MySQL 生产库', type: 'tcp', host: '192.168.1.100', port: 3306, status: 'UP', groupId: 3, lastResponseTime: 12, availability24h: 100, hasAvailability: true, ago: 6 },
   ],
   trend: {
     range: '24h',
@@ -31,7 +41,7 @@ export const demoDashboard = {
     delta: -12,
     success: 45327,
     failure: 32,
-    points: wave.map((avg, i) => ({ time: new Date(Date.now() - (23 - i) * 3600000).toISOString(), avg })),
+    points: wave.map((avg, i) => ({ time: atHour(i), avg })),
   },
 }
 
@@ -55,6 +65,14 @@ export const demoEvents = [
 export const demoCerts = [
   { id: 'cert', name: 'api.example.com', url: 'api.example.com', certNotAfter: '2026-10-15T00:00:00Z', certDaysRemaining: 6, certIssuer: "Let's Encrypt", tlsStatus: 'CRITICAL' },
 ]
+
+export function presentDemo() {
+  return {
+    ...demoDashboard,
+    overview: demoDashboard.overview.map((row) => ({ ...row, lastCheckAt: ago(row.ago) })),
+    trend: { ...demoDashboard.trend, points: demoDashboard.trend.points.map((point, i) => ({ ...point, time: atHour(i) })) },
+  }
+}
 
 export function demoTrend(range) {
   if (range === '7d') {

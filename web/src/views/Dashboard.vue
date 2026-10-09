@@ -92,7 +92,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
-import { demoDashboard, demoGroups, demoTrend } from '../demo'
+import { demoGroups, demoTrend, presentDemo } from '../demo'
 import { isDemo, joinNames, relative, statusLabel, targetOf } from '../format'
 
 const data = reactive({ trend: { points: [] }, problems: [], overview: [] })
@@ -123,7 +123,8 @@ function iconOf(row) {
 
 async function load() {
   if (isDemo()) {
-    Object.assign(data, { ...demoDashboard, trend: demoTrend(range.value) })
+    const demo = presentDemo()
+    Object.assign(data, { ...demo, trend: range.value === '24h' ? demo.trend : demoTrend(range.value) })
     groups.value = demoGroups
     return
   }

@@ -56,9 +56,17 @@ const area = computed(() => {
 const labels = computed(() => {
   const n = props.points.length
   if (!n) return []
+  const span = new Date(props.points[n - 1].time) - new Date(props.points[0].time)
+  const onHour = props.points.every((point) => new Date(point.time).getMinutes() === 0)
+  if (onHour && span < 36 * 3600000 && n >= 12) {
+    return props.points.flatMap((point, i) => {
+      const hour = new Date(point.time).getHours()
+      if (hour % 4 !== 0) return []
+      return [{ x: coords.value[i][0] - 14, text: `${String(hour).padStart(2, '0')}:00` }]
+    })
+  }
   const count = Math.min(6, n)
   const indexes = Array.from({ length: count }, (_, i) => Math.round(i * (n - 1) / (count - 1 || 1)))
-  const span = new Date(props.points[n - 1].time) - new Date(props.points[0].time)
   return [...new Set(indexes)].map((i) => {
     const date = new Date(props.points[i].time)
     const hh = String(date.getHours()).padStart(2, '0')

@@ -42,7 +42,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
-import { demoDashboard } from '../demo'
+import { presentDemo } from '../demo'
 import { isDemo, relative, statusLabel, targetOf } from '../format'
 
 const items = ref([])
@@ -52,7 +52,7 @@ const query = reactive({ keyword: '', type: '', status: '' })
 
 async function load() {
   if (isDemo()) {
-    items.value = demoDashboard.overview
+    items.value = presentDemo().overview
     total.value = items.value.length
     return
   }
