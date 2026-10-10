@@ -25,6 +25,7 @@
     <path v-else-if="name === 'mem'" d="M5 7h14v10H5zM8 7v10M12 7v10M16 7v10" />
     <path v-else-if="name === 'disk'" d="M4 7h16v10H4zM4 12h16M8 15h2" />
     <path v-else-if="name === 'script'" d="M5 4h14v16H5zM8 8l3 3-3 3M13 15h3" />
+    <path v-else-if="name === 'terminal'" d="M4 6h16v12H4zM7 10l3 2-3 2M12 14h5" />
   </svg>
 </template>
 

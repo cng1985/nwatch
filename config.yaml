@@ -41,3 +41,10 @@ mail:
   from: ""
   to: ""
   encryption: starttls
+
+# 管理台里的交互式终端，身份与 NMonitor 进程相同。
+shell:
+  enabled: true
+  idle_timeout: 15m
+  max_lifetime: 4h
+  max_sessions: 8

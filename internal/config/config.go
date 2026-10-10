@@ -20,6 +20,7 @@ type Config struct {
 	Log       LogConfig       `yaml:"log"`
 	Backup    BackupConfig    `yaml:"backup"`
 	Mail      MailConfig      `yaml:"mail"`
+	Shell     ShellConfig     `yaml:"shell"`
 
 	ConfigPath string `yaml:"-"`
 }
@@ -80,6 +81,14 @@ type MailConfig struct {
 	Encryption string `yaml:"encryption"`
 }
 
+// ShellConfig 控制管理台里的交互式终端。
+type ShellConfig struct {
+	Enabled     bool          `yaml:"enabled"`
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
+	MaxLifetime time.Duration `yaml:"max_lifetime"`
+	MaxSessions int           `yaml:"max_sessions"`
+}
+
 func Default() *Config {
 	return &Config{
 		Server:    ServerConfig{Host: "0.0.0.0", Port: 8080},
@@ -96,6 +105,12 @@ func Default() *Config {
 		Log:      LogConfig{Level: "info"},
 		Backup:   BackupConfig{Enabled: true, Dir: "./data/backups", RetentionDays: 7, Hour: 3},
 		Mail:     MailConfig{Port: 587, Encryption: "starttls"},
+		Shell: ShellConfig{
+			Enabled:     true,
+			IdleTimeout: 15 * time.Minute,
+			MaxLifetime: 4 * time.Hour,
+			MaxSessions: 8,
+		},
 	}
 }
 
@@ -165,6 +180,9 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("NMONITOR_SMTP_ENCRYPTION"); v != "" {
 		c.Mail.Encryption = v
 	}
+	if v := os.Getenv("NMONITOR_SHELL_ENABLED"); v != "" {
+		c.Shell.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
 }
 
 func (c *Config) normalize() {
@@ -233,5 +251,20 @@ func (c *Config) normalize() {
 		} else {
 			c.Mail.Port = 587
 		}
+	}
+	if c.Shell.IdleTimeout < time.Minute {
+		c.Shell.IdleTimeout = 15 * time.Minute
+	}
+	if c.Shell.MaxLifetime < 10*time.Minute {
+		c.Shell.MaxLifetime = 4 * time.Hour
+	}
+	if c.Shell.MaxLifetime < c.Shell.IdleTimeout {
+		c.Shell.MaxLifetime = c.Shell.IdleTimeout
+	}
+	if c.Shell.MaxSessions <= 0 {
+		c.Shell.MaxSessions = 8
+	}
+	if c.Shell.MaxSessions > 32 {
+		c.Shell.MaxSessions = 32
 	}
 }

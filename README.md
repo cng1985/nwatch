@@ -19,6 +19,7 @@ config.yaml
 - TCP 端口连通性
 - 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
+- 在线终端：登录后在管理台打开本机交互式 Shell，一次性连接凭证，空闲和最长时长自动断开
 - 运行日志：在管理台查看进程日志，保留 7 天
 - 调度器每秒领取到期任务，固定大小的工作池执行，同一个监控不会重叠检查
 - 连续失败后才标记为异常，恢复也可要求连续成功
@@ -64,6 +65,7 @@ NMONITOR_SMTP_PASSWORD
 NMONITOR_SMTP_FROM
 NMONITOR_SMTP_TO
 NMONITOR_SMTP_ENCRYPTION
+NMONITOR_SHELL_ENABLED
 ```
 
 `NMONITOR_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。
@@ -111,7 +113,16 @@ GET             /api/host
 POST            /api/scripts/run
 GET             /api/scripts/runs
 GET             /api/logs
+GET             /api/shell
+POST            /api/shell/ticket
+GET             /api/shell/ws
 ```
+
+## 在线终端
+
+管理台的「在线终端」通过 WebSocket 连接本机 Shell，执行身份与 NMonitor 进程相同。页面先申请 30 秒内有效、只能使用一次的连接凭证，再升级连接，长期登录令牌不会出现在地址栏里。
+
+默认空闲 15 分钟断开，单次最长 4 小时，同时最多 8 个会话。可以在 `config.yaml` 的 `shell` 段调整，或用 `NMONITOR_SHELL_ENABLED=false` 关闭。跨站页面不能连接。会话的建立和断开会写进运行日志，按键内容不会记录。
 
 ## 测试
 
