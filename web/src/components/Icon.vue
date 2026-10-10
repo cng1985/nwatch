@@ -3,6 +3,7 @@
     <path v-if="name === 'wave'" d="M3 12h3l2.2-6 3.2 12 2.4-7 2 4H21" />
     <path v-else-if="name === 'home'" d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z" />
     <path v-else-if="name === 'list'" d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
+    <path v-else-if="name === 'grid'" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
     <path v-else-if="name === 'cert'" d="M7 3h10a1 1 0 0 1 1 1v16l-6-3-6 3V4a1 1 0 0 1 1-1z" />
     <path v-else-if="name === 'bell'" d="M6 9a6 6 0 1 1 12 0c0 7 2 7 2 7H4s2 0 2-7M10 19a2 2 0 0 0 4 0" />
     <path v-else-if="name === 'chat'" d="M5 6h14v9H8l-3 3z" />
