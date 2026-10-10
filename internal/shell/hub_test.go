@@ -2,6 +2,7 @@ package shell
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -51,6 +52,22 @@ func TestTicketDisabledAndCap(t *testing.T) {
 	}
 	if _, err := h.Issue("admin"); !errors.Is(err, ErrTooManyTickets) {
 		t.Fatalf("cap: %v", err)
+	}
+}
+
+func TestShellCandidates(t *testing.T) {
+	got := shellCandidates()
+	if len(got) == 0 || got[0].name == "" {
+		t.Fatalf("%+v", got)
+	}
+	if runtime.GOOS == "windows" {
+		if got[0].name != "pwsh" || got[len(got)-1].name != "cmd" {
+			t.Fatalf("%+v", got)
+		}
+		return
+	}
+	if got[0].name != "bash" || got[len(got)-1].name != "sh" {
+		t.Fatalf("%+v", got)
 	}
 }
 

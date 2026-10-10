@@ -43,6 +43,7 @@ mail:
   encryption: starttls
 
 # 管理台里的交互式终端，身份与 NMonitor 进程相同。
+# Linux 使用 bash 或 sh；Windows 10 1809 及以上使用 PowerShell 或 cmd。
 shell:
   enabled: true
   idle_timeout: 15m
