@@ -19,6 +19,7 @@ import (
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/scheduler"
 	"github.com/cng1985/nwatch/internal/settings"
+	"github.com/cng1985/nwatch/internal/shell"
 	"github.com/cng1985/nwatch/internal/version"
 	"github.com/cng1985/nwatch/internal/web"
 	"github.com/gin-gonic/gin"
@@ -38,6 +39,7 @@ type Server struct {
 	mail      *mailer.Service
 	collector *host.Collector
 	logs      *logview.Store
+	shellHub  *shell.Hub
 	engine    *gin.Engine
 	http      *http.Server
 	started   time.Time
@@ -62,6 +64,12 @@ func NewServer(
 		cfg: cfg, db: db, settings: store, tokens: tokens,
 		processor: processor, pool: pool, sched: sched, alerts: alerts, mail: mail,
 		collector: collector, logs: logs,
+		shellHub: shell.NewHub(shell.Options{
+			Enabled:     cfg.Shell.Enabled,
+			IdleTimeout: cfg.Shell.IdleTimeout,
+			MaxLifetime: cfg.Shell.MaxLifetime,
+			MaxSessions: cfg.Shell.MaxSessions,
+		}),
 		engine: gin.New(), started: time.Now(),
 	}
 	s.engine.Use(gin.Recovery())
@@ -84,6 +92,7 @@ func NewServer(
 			},
 			OnStop: func(ctx context.Context) error {
 				slog.Info("停止接收 HTTP 请求")
+				s.shellHub.Close()
 				return s.http.Shutdown(ctx)
 			},
 		})
@@ -139,6 +148,9 @@ func (s *Server) routes() {
 	authed.GET("/scripts/runs/:id", s.getScriptRun)
 	authed.POST("/scripts/run", s.runScript)
 	authed.GET("/logs", s.listLogs)
+	authed.GET("/shell", s.shellInfo)
+	authed.POST("/shell/ticket", s.shellTicket)
+	s.engine.GET("/api/shell/ws", s.shellConnect)
 	s.engine.NoRoute(s.frontend)
 }
 

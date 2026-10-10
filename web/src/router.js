@@ -26,6 +26,7 @@ const router = createRouter({
         { path: '', component: Dashboard, meta: { crumbs: ['工作空间', '系统总览'], nav: '/' } },
         { path: 'resources', component: Resources, meta: { crumbs: ['工作空间', '主机资源'], nav: '/resources' } },
         { path: 'scripts', component: Scripts, meta: { crumbs: ['工作空间', '脚本执行'], nav: '/scripts' } },
+        { path: 'shell', component: () => import('./views/Shell.vue'), meta: { crumbs: ['工作空间', '在线终端'], nav: '/shell' } },
         { path: 'monitors', component: Monitors, meta: { crumbs: ['工作空间', '监控列表'], nav: '/monitors' } },
         { path: 'monitors/new', component: MonitorEdit, meta: { crumbs: ['工作空间', '监控列表', '新增监控'], nav: '/monitors' } },
         { path: 'monitors/:id/edit', component: MonitorEdit, meta: { crumbs: ['工作空间', '监控列表', '编辑监控'], nav: '/monitors' } },

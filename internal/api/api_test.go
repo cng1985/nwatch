@@ -78,7 +78,9 @@ func newTestServer(t *testing.T) *Server {
 	sched := scheduler.NewScheduler(time.Hour, db, pool, nil)
 	sched.Start()
 	t.Cleanup(sched.Stop)
-	return NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, collector, logs, nil)
+	srv := NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, collector, logs, nil)
+	t.Cleanup(func() { srv.shellHub.Close() })
+	return srv
 }
 
 func TestLoginAndMonitorCheckFlow(t *testing.T) {
