@@ -166,7 +166,7 @@ func shellStatus(err error) int {
 	switch {
 	case errors.Is(err, shell.ErrDisabled):
 		return http.StatusForbidden
-	case errors.Is(err, shell.ErrNoShell):
+	case errors.Is(err, shell.ErrNoShell), errors.Is(err, shell.ErrUnsupported):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, shell.ErrBusy), errors.Is(err, shell.ErrTooManyTickets):
 		return http.StatusTooManyRequests

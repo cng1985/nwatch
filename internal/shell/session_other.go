@@ -1,19 +1,13 @@
-//go:build !unix
+//go:build !unix && !windows
 
 package shell
 
 import (
-	"errors"
-	"os"
 	"os/exec"
 )
 
-func startPTY(cmd *exec.Cmd, cols, rows int) (*os.File, error) {
-	return nil, errors.New("在线终端仅支持 Linux")
-}
-
-func resizePTY(f *os.File, cols, rows int) error {
-	return errors.New("在线终端仅支持 Linux")
+func startPTY(cmd *exec.Cmd, cols, rows int) (terminal, error) {
+	return nil, ErrUnsupported
 }
 
 func killProcess(pid int) error { return nil }

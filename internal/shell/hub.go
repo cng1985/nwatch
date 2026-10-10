@@ -19,6 +19,7 @@ var (
 	ErrBusy           = errors.New("在线终端会话已满")
 	ErrTicket         = errors.New("连接凭证无效或已过期")
 	ErrTooManyTickets = errors.New("连接凭证过多，请稍后再试")
+	ErrUnsupported    = errors.New("当前系统不支持交互式终端，Windows 需要 10 1809 或更新版本")
 )
 
 // Options 是终端会话的运行限制。零值会换成默认值，Enabled 除外。
@@ -165,7 +166,7 @@ func (h *Hub) Open(username, remote string, cols, rows int) (*Session, error) {
 	sess, err := startSession(cols, rows)
 	if err != nil {
 		h.mu.Unlock()
-		if errors.Is(err, ErrNoShell) {
+		if errors.Is(err, ErrNoShell) || errors.Is(err, ErrUnsupported) {
 			return nil, err
 		}
 		slog.Error("打开在线终端失败", "err", err.Error(), "user", username)

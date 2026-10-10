@@ -5,10 +5,20 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 )
+
+// terminal 是交互式会话的两端。Linux 上是 pty 主端，Windows 上是 ConPTY 管道。
+type terminal interface {
+	Read([]byte) (int, error)
+	Write([]byte) (int, error)
+	Close() error
+	SetReadDeadline(time.Time) error
+	Resize(cols, rows int) error
+}
 
 // Session 是一个已经挂上伪终端的交互式 shell。
 type Session struct {
@@ -16,7 +26,7 @@ type Session struct {
 	user      string
 	remote    string
 	shellPath string
-	pty       *os.File
+	term      terminal
 	cmd       *exec.Cmd
 	hub       *Hub
 	started   time.Time
@@ -59,12 +69,12 @@ func (s *Session) Touch() {
 
 func (s *Session) Read(p []byte) (int, error) {
 	s.mu.Lock()
-	f := s.pty
+	term := s.term
 	s.mu.Unlock()
-	if f == nil {
+	if term == nil {
 		return 0, io.EOF
 	}
-	return f.Read(p)
+	return term.Read(p)
 }
 
 func (s *Session) Write(p []byte) (int, error) {
@@ -75,22 +85,22 @@ func (s *Session) Write(p []byte) (int, error) {
 		return 0, io.ErrShortWrite
 	}
 	s.mu.Lock()
-	f := s.pty
+	term := s.term
 	s.mu.Unlock()
-	if f == nil {
+	if term == nil {
 		return 0, io.EOF
 	}
-	return f.Write(p)
+	return term.Write(p)
 }
 
 func (s *Session) SetReadDeadline(t time.Time) error {
 	s.mu.Lock()
-	f := s.pty
+	term := s.term
 	s.mu.Unlock()
-	if f == nil {
+	if term == nil {
 		return io.EOF
 	}
-	return f.SetReadDeadline(t)
+	return term.SetReadDeadline(t)
 }
 
 // Resize 修改终端尺寸。超出范围的请求会被忽略。
@@ -99,12 +109,12 @@ func (s *Session) Resize(cols, rows int) error {
 		return nil
 	}
 	s.mu.Lock()
-	f := s.pty
+	term := s.term
 	s.mu.Unlock()
-	if f == nil {
+	if term == nil {
 		return io.EOF
 	}
-	return resizePTY(f, cols, rows)
+	return term.Resize(cols, rows)
 }
 
 // CloseWith 结束会话。reason 只会保留第一次的值。
@@ -115,7 +125,7 @@ func (s *Session) CloseWith(reason string) {
 		}
 		s.mu.Lock()
 		s.reason = reason
-		f := s.pty
+		term := s.term
 		pid := 0
 		if s.cmd != nil && s.cmd.Process != nil {
 			pid = s.cmd.Process.Pid
@@ -124,8 +134,8 @@ func (s *Session) CloseWith(reason string) {
 		started := s.started
 		s.mu.Unlock()
 		close(s.done)
-		if f != nil {
-			_ = f.Close()
+		if term != nil {
+			_ = term.Close()
 		}
 		_ = killProcess(pid)
 		if s.hub != nil {
@@ -184,20 +194,20 @@ func (s *Session) watchLimits(idle, life time.Duration) {
 }
 
 func startSession(cols, rows int) (*Session, error) {
-	path := LookShell()
+	path, args := shellCommand()
 	if path == "" {
 		return nil, ErrNoShell
 	}
 	cols, rows = NormalizeSize(cols, rows)
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, args...)
 	cmd.Dir = workingDir()
 	cmd.Env = shellEnv()
-	f, err := startPTY(cmd, cols, rows)
+	term, err := startPTY(cmd, cols, rows)
 	if err != nil {
 		return nil, err
 	}
 	return &Session{
-		pty:       f,
+		term:      term,
 		cmd:       cmd,
 		done:      make(chan struct{}),
 		shellPath: path,
@@ -205,26 +215,52 @@ func startSession(cols, rows int) (*Session, error) {
 	}, nil
 }
 
-// LookShell 优先选择 bash，其次是 sh。
-func LookShell() string {
-	for _, name := range []string{"bash", "sh"} {
-		if path, err := exec.LookPath(name); err == nil {
-			return path
+type shellCandidate struct {
+	name string
+	args []string
+}
+
+func shellCandidates() []shellCandidate {
+	if runtime.GOOS == "windows" {
+		return []shellCandidate{
+			{name: "pwsh", args: []string{"-NoLogo"}},
+			{name: "powershell", args: []string{"-NoLogo"}},
+			{name: "cmd"},
 		}
 	}
-	return ""
+	return []shellCandidate{{name: "bash"}, {name: "sh"}}
+}
+
+func shellCommand() (string, []string) {
+	for _, item := range shellCandidates() {
+		path, err := exec.LookPath(item.name)
+		if err == nil {
+			return path, item.args
+		}
+	}
+	return "", nil
+}
+
+// LookShell 返回将要启动的 shell 路径。Linux 优先 bash，Windows 优先 PowerShell。
+func LookShell() string {
+	path, _ := shellCommand()
+	return path
 }
 
 func workingDir() string {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "/"
+	if dir, err := os.Getwd(); err == nil {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
 	}
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return "/"
+	if runtime.GOOS == "windows" {
+		drive := os.Getenv("SystemDrive")
+		if drive == "" {
+			drive = "C:"
+		}
+		return drive + `\`
 	}
-	return dir
+	return "/"
 }
 
 func shellEnv() []string {
