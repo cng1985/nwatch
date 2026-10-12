@@ -1,4 +1,4 @@
-.PHONY: web build test run
+.PHONY: web build test run install-service
 
 web:
 	cd web && npm install && npm run build
@@ -11,3 +11,6 @@ test:
 
 run: build
 	./nmonitor
+
+install-service:
+	./deploy/install-service.sh

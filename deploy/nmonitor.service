@@ -1,3 +1,4 @@
+# deploy/install-service.sh 会按安装目录重写 WorkingDirectory、ExecStart 和 EnvironmentFile。
 [Unit]
 Description=NMonitor lightweight service monitor
 After=network-online.target

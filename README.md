@@ -72,6 +72,19 @@ NMONITOR_SHELL_ENABLED
 
 ## systemd
 
+在已经编译好的机器上，用脚本安装并启动服务（需要 root，且系统使用 systemd）：
+
+```bash
+make build
+sudo env NMONITOR_PASSWORD='your-password' ./deploy/install-service.sh
+```
+
+脚本把二进制和 `config.yaml` 放到 `/opt/nmonitor`，创建数据目录和 `nmonitor.env`，写入 systemd 单元，设置开机启动并立即启动。已经存在的 `config.yaml` 和 `nmonitor.env` 不会被覆盖。再次执行会更新二进制和单元；服务若已在运行，会重启以加载新程序。
+
+在终端里直接运行、并且还没有 `nmonitor.env` 时，会提示设置管理员密码。非交互环境下请通过 `NMONITOR_PASSWORD` 传入，否则会先写入示例值 `change-me`。
+
+也可以手工安装：
+
 ```bash
 sudo mkdir -p /opt/nmonitor/data
 sudo cp nmonitor config.yaml /opt/nmonitor/
