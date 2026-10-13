@@ -21,6 +21,7 @@ type Config struct {
 	Backup    BackupConfig    `yaml:"backup"`
 	Mail      MailConfig      `yaml:"mail"`
 	Shell     ShellConfig     `yaml:"shell"`
+	Service   ServiceConfig   `yaml:"service"`
 
 	ConfigPath string `yaml:"-"`
 }
@@ -81,6 +82,11 @@ type MailConfig struct {
 	Encryption string `yaml:"encryption"`
 }
 
+// ServiceConfig 控制管理台里的 systemd 服务管理。
+type ServiceConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 // ShellConfig 控制管理台里的交互式终端。
 type ShellConfig struct {
 	Enabled     bool          `yaml:"enabled"`
@@ -111,6 +117,7 @@ func Default() *Config {
 			MaxLifetime: 4 * time.Hour,
 			MaxSessions: 8,
 		},
+		Service: ServiceConfig{Enabled: true},
 	}
 }
 
@@ -182,6 +189,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("NMONITOR_SHELL_ENABLED"); v != "" {
 		c.Shell.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
+	if v := os.Getenv("NMONITOR_SERVICE_ENABLED"); v != "" {
+		c.Service.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
 	}
 }
 

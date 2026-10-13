@@ -21,6 +21,7 @@ config.yaml
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
 - 定时任务：用 5 段 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间按系统配置里的时区计算，同一个任务不会重叠执行
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
+- 系统服务：在管理台列出本机 systemd 服务，启动、停止、重启，并用 journalctl 查看日志
 - 运行日志：在管理台查看进程日志，保留 7 天
 - 调度器每秒领取到期任务，固定大小的工作池执行，同一个监控不会重叠检查
 - 连续失败后才标记为异常，恢复也可要求连续成功
@@ -28,7 +29,7 @@ config.yaml
 - 邮件和所有已启用的通知渠道：连续失败达到阈值后，15 秒通知一次，45 秒再通知一次，之后每 1 分钟通知一次，直到服务恢复。关闭的渠道不发送。某一封邮件发送失败会持续重试，直到成功
 - 证书按 30/14/7/3/1/0 天阈值各提醒一次
 - 检测历史、分钟/小时/天统计、1 小时到 30 天可用率
-- Web 管理台：总览、主机资源、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、系统配置
+- Web 管理台：总览、主机资源、系统服务、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、系统配置
 - 管理员登录，默认密码可通过环境变量覆盖
 - 配置导入导出，SQLite 备份
 
@@ -67,6 +68,7 @@ NMONITOR_SMTP_FROM
 NMONITOR_SMTP_TO
 NMONITOR_SMTP_ENCRYPTION
 NMONITOR_SHELL_ENABLED
+NMONITOR_SERVICE_ENABLED
 ```
 
 `NMONITOR_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。
@@ -135,10 +137,23 @@ GET             /api/cron-jobs/:id/runs
 GET             /api/cron-runs
 GET             /api/cron/preview
 GET             /api/logs
+GET             /api/services
+POST            /api/services/:name/start
+POST            /api/services/:name/stop
+POST            /api/services/:name/restart
+GET             /api/services/:name/logs
 GET             /api/shell
 POST            /api/shell/ticket
 GET             /api/shell/ws
 ```
+
+## 系统服务
+
+管理台的「系统服务」调用本机 `systemctl` 列出 service 单元，并执行启动、停止和重启。日志通过 `journalctl -u` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同。
+
+服务名只接受 systemd 的 service 单元，不能包含空格、路径或 shell 元字符。`systemd.service` 和 `init.service` 不能在这里操作。命令不经过 shell。启动、停止、重启和失败原因会写进运行日志。
+
+没有 `systemctl` 的环境仍可打开页面，接口会返回不可用原因。可以在 `config.yaml` 的 `service` 段设置 `enabled: false`，或用 `NMONITOR_SERVICE_ENABLED=false` 关闭。用 root 安装的 systemd 服务可以直接操作；普通用户可能因权限不足只能查看，或在操作时看到 systemctl 返回的拒绝信息。
 
 ## 在线终端
 
