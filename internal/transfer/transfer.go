@@ -57,13 +57,19 @@ type MonitorItem struct {
 }
 
 type CronItem struct {
-	Name        string `json:"name"`
-	Cron        string `json:"cron"`
-	Command     string `json:"command"`
-	WorkDir     string `json:"workDir,omitempty"`
-	Timeout     int    `json:"timeout"`
-	Description string `json:"description,omitempty"`
-	Enabled     bool   `json:"enabled"`
+	Name        string            `json:"name"`
+	Cron        string            `json:"cron"`
+	Kind        string            `json:"kind,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	WorkDir     string            `json:"workDir,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Method      string            `json:"method,omitempty"`
+	BodyType    string            `json:"bodyType,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	Timeout     int               `json:"timeout"`
+	Description string            `json:"description,omitempty"`
+	Enabled     bool              `json:"enabled"`
 }
 
 func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
@@ -114,7 +120,8 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 	}
 	for _, job := range jobs {
 		out.CronJobs = append(out.CronJobs, CronItem{
-			Name: job.Name, Cron: job.Cron, Command: job.Command, WorkDir: job.WorkDir,
+			Name: job.Name, Cron: job.Cron, Kind: job.Kind, Command: job.Command, WorkDir: job.WorkDir,
+			URL: job.URL, Method: job.Method, BodyType: job.BodyType, Headers: job.Headers, Body: job.Body,
 			Timeout: job.Timeout, Description: job.Description, Enabled: job.Enabled,
 		})
 	}
@@ -251,7 +258,8 @@ func Import(db *gorm.DB, b Bundle) error {
 			}
 			enabled := item.Enabled
 			req := cronjob.Request{
-				Name: item.Name, Cron: item.Cron, Command: item.Command, WorkDir: item.WorkDir,
+				Name: item.Name, Cron: item.Cron, Kind: item.Kind, Command: item.Command, WorkDir: item.WorkDir,
+				URL: item.URL, Method: item.Method, BodyType: item.BodyType, Headers: item.Headers, Body: item.Body,
 				Timeout: item.Timeout, Description: item.Description, Enabled: &enabled,
 			}
 			if err := req.Normalize(); err != nil {

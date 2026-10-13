@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <h1>定时任务</h1>
-        <p>按 cron 表达式在服务器上执行命令。时间使用系统配置里的时区，同一任务不会重叠执行。</p>
+        <p>按 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间使用系统配置里的时区，同一任务不会重叠执行。</p>
       </div>
       <button class="btn primary" @click="startCreate"><Icon name="plus" style="width:16px;height:16px" /> 新建任务</button>
     </div>
@@ -25,9 +25,23 @@
             </select>
           </label>
           <label class="field"><span class="req">Cron 表达式</span><input v-model="form.cron" class="text" placeholder="0 2 * * *" /></label>
-          <label class="field full"><span>说明</span><input v-model="form.description" class="text" placeholder="每天凌晨清理 7 天前的临时文件" /></label>
-          <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="find /tmp -type f -mtime +7 -delete"></textarea></label>
-          <label class="field full"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/tmp" /></label>
+          <label class="field full"><span>说明</span><input v-model="form.description" class="text" :placeholder="action === 'script' ? '每天凌晨清理 7 天前的临时文件' : '每天同步一次状态'" /></label>
+          <div class="types full">
+            <button v-for="item in actions" :key="item.id" type="button" class="type-card" :class="{ on: action === item.id }" @click="setAction(item.id)">
+              <Icon v-if="action === item.id" class="tick" name="check" />
+              {{ item.label }}
+            </button>
+          </div>
+          <template v-if="action === 'script'">
+            <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="find /tmp -type f -mtime +7 -delete"></textarea></label>
+            <label class="field full"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/tmp" /></label>
+          </template>
+          <template v-else>
+            <label class="field full"><span class="req">请求地址</span><input v-model="form.url" class="text" placeholder="https://example.com/hook" /></label>
+            <label class="field full"><span>请求头</span><textarea v-model="form.headersText" class="text" rows="3" placeholder="Authorization: Bearer token"></textarea></label>
+            <label v-if="action === 'post_form'" class="field full"><span>表单</span><textarea v-model="form.body" class="text" rows="5" placeholder="name=nmonitor&#10;ok=1"></textarea></label>
+            <label v-if="action === 'post_json'" class="field full"><span class="req">JSON</span><textarea v-model="form.body" class="text" rows="5" placeholder='{"ok":true}'></textarea></label>
+          </template>
           <label class="field check"><input v-model="form.enabled" type="checkbox" /> 启用</label>
         </div>
         <p v-if="error" class="error">{{ error }}</p>
@@ -41,13 +55,13 @@
         <div class="kv"><span>计划</span><b>{{ preview?.text || '填写表达式后计算' }}</b></div>
         <div class="kv"><span>时区</span><b>{{ preview?.timezone || '系统时区' }}</b></div>
         <div v-for="(item, index) in preview?.next || []" :key="item" class="kv"><span>第 {{ index + 1 }} 次</span><b>{{ zoneClock(item) }}</b></div>
-        <p class="demo-note" style="line-height:1.7">表达式是 5 段：分 时 日 月 周。日和周都写了具体值时，满足任意一个就会执行。命令通过 sh -c 执行，身份与 NMonitor 进程相同。</p>
+        <p class="demo-note" style="line-height:1.7">表达式是 5 段：分 时 日 月 周。日和周都写了具体值时，满足任意一个就会执行。{{ action === 'script' ? '脚本通过 sh -c 执行，身份与 NMonitor 进程相同。' : '请求从服务器发出。2xx 算成功，POST 不会跟随重定向。' }}</p>
       </aside>
     </div>
 
     <p v-if="notice" class="error">{{ notice }}</p>
     <div class="toolbar">
-      <input v-model="keyword" class="search" placeholder="搜索名称、表达式或命令" @keyup.enter="load" />
+      <input v-model="keyword" class="search" placeholder="搜索名称、表达式或地址" @keyup.enter="load" />
       <button class="btn ghost" @click="load">查询</button>
     </div>
     <div class="card table-wrap">
@@ -55,7 +69,7 @@
         <thead><tr><th>任务</th><th>计划</th><th>状态</th><th>下次执行</th><th>最近执行</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="row in items" :key="row.id" class="clickable" :class="{ 'row-on': selected && selected.id === row.id }" @click="openRuns(row)">
-            <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ firstLine(row.command) }}</small></td>
+            <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ targetOf(row) }}</small></td>
             <td>{{ row.scheduleText || row.cron }}<small style="display:block;color:#60707b">{{ row.cron }}</small></td>
             <td><span class="status" :class="statusOf(row).cls">{{ statusOf(row).text }}</span></td>
             <td>{{ row.enabled ? zoneClock(row.nextRunAt) : '-' }}</td>
@@ -81,7 +95,7 @@
         <button class="btn ghost" @click="openRuns(selected)">刷新记录</button>
       </div>
       <table>
-        <thead><tr><th>时间</th><th>触发</th><th>结果</th><th>退出码</th><th>耗时</th></tr></thead>
+        <thead><tr><th>时间</th><th>触发</th><th>结果</th><th>{{ selected.kind === 'http' ? '状态码' : '退出码' }}</th><th>耗时</th></tr></thead>
         <tbody>
           <tr v-for="row in runs" :key="row.id" class="clickable" :class="{ 'row-on': output && output.id === row.id }" @click="output = row">
             <td>{{ zoneClock(row.startedAt) }}</td>
@@ -117,6 +131,12 @@ const presets = [
   ['0 0 1 * *', '每月 1 日 00:00'],
 ]
 const timeouts = [[10, '10 秒'], [30, '30 秒'], [60, '1 分钟'], [120, '2 分钟'], [300, '5 分钟'], [600, '10 分钟'], [1800, '30 分钟'], [3600, '1 小时']]
+const actions = [
+  { id: 'script', label: '脚本' },
+  { id: 'get', label: 'GET' },
+  { id: 'post_form', label: 'POST 表单' },
+  { id: 'post_json', label: 'POST JSON' },
+]
 
 const timezone = ref('Asia/Shanghai')
 const items = ref([])
@@ -132,11 +152,20 @@ const output = ref(null)
 const runningId = ref(0)
 const form = reactive(blank())
 const presetValue = computed(() => presets.some((item) => item[0] === form.cron) ? form.cron : '')
+const action = computed(() => {
+  if (form.kind !== 'http') return 'script'
+  if (form.method === 'POST' && form.bodyType === 'json') return 'post_json'
+  if (form.method === 'POST') return 'post_form'
+  return 'get'
+})
 let timer = 0
 let previewTimer = 0
 
 function blank() {
-  return { id: 0, name: '', cron: '0 2 * * *', command: '', workDir: '', timeout: 60, description: '', enabled: true }
+  return {
+    id: 0, name: '', cron: '0 2 * * *', kind: 'script', command: '', workDir: '',
+    url: '', method: '', bodyType: '', headersText: '', body: '', timeout: 60, description: '', enabled: true,
+  }
 }
 
 function zoneClock(value) {
@@ -161,6 +190,51 @@ function firstLine(value) {
   return (value || '').split('\n').map((line) => line.trim()).find(Boolean) || '-'
 }
 
+function targetOf(row) {
+  if (row.targetText) return row.targetText
+  if (row.kind === 'http') {
+    const mode = row.method === 'POST' ? (row.bodyType === 'json' ? 'POST JSON' : 'POST 表单') : 'GET'
+    return `${mode} ${row.url || ''}`.trim()
+  }
+  return firstLine(row.command)
+}
+
+function headersToText(headers) {
+  return Object.entries(headers || {}).map(([key, value]) => `${key}: ${value}`).join('\n')
+}
+
+function textToHeaders(text) {
+  const headers = {}
+  for (const line of (text || '').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const index = trimmed.indexOf(':')
+    if (index <= 0) throw new Error('请求头写成 Header: 值，每行一个')
+    headers[trimmed.slice(0, index).trim()] = trimmed.slice(index + 1).trim()
+  }
+  return headers
+}
+
+function setAction(next) {
+  const prev = action.value
+  if (next === 'script') {
+    form.kind = 'script'
+    form.method = ''
+    form.bodyType = ''
+    return
+  }
+  form.kind = 'http'
+  if (next === 'get') {
+    form.method = 'GET'
+    form.bodyType = ''
+    form.body = ''
+    return
+  }
+  form.method = 'POST'
+  form.bodyType = next === 'post_json' ? 'json' : 'form'
+  if (next !== prev && (prev === 'post_json' || prev === 'post_form' || prev === 'get')) form.body = ''
+}
+
 function statusOf(row) {
   if (!row.enabled) return { cls: 'PAUSED', text: '已停用' }
   return {
@@ -174,15 +248,15 @@ function statusOf(row) {
 function demoItems() {
   const next = new Date(Date.now() + 3600 * 1000).toISOString()
   return [
-    { id: 1, name: '清理临时文件', cron: '0 2 * * *', scheduleText: '每天 02:00', command: 'find /tmp -type f -mtime +7 -delete', enabled: true, lastStatus: 'SUCCESS', lastRunAt: new Date(Date.now() - 3600 * 1000).toISOString(), nextRunAt: next, lastMessage: '执行成功', timeout: 60 },
-    { id: 2, name: '数据库备份', cron: '0 3 * * *', scheduleText: '每天 03:00', command: 'echo backup', enabled: false, lastStatus: 'FAILED', lastRunAt: new Date(Date.now() - 86400 * 1000).toISOString(), nextRunAt: next, lastMessage: '退出码 1', timeout: 300 },
+    { id: 1, name: '清理临时文件', cron: '0 2 * * *', kind: 'script', scheduleText: '每天 02:00', command: 'find /tmp -type f -mtime +7 -delete', enabled: true, lastStatus: 'SUCCESS', lastRunAt: new Date(Date.now() - 3600 * 1000).toISOString(), nextRunAt: next, lastMessage: '执行成功', timeout: 60 },
+    { id: 2, name: '同步状态', cron: '0 3 * * *', kind: 'http', method: 'POST', bodyType: 'json', url: 'https://example.com/hook', scheduleText: '每天 03:00', targetText: 'POST JSON https://example.com/hook', enabled: false, lastStatus: 'FAILED', lastRunAt: new Date(Date.now() - 86400 * 1000).toISOString(), nextRunAt: next, lastMessage: 'HTTP 502', timeout: 30 },
   ]
 }
 
 async function load() {
   try {
     if (isDemo()) {
-      items.value = demoItems().filter((row) => !keyword.value || `${row.name} ${row.cron} ${row.command}`.includes(keyword.value))
+      items.value = demoItems().filter((row) => !keyword.value || `${row.name} ${row.cron} ${row.command || ''} ${row.url || ''}`.includes(keyword.value))
       return
     }
     const data = await api('/api/cron-jobs?pageSize=50&keyword=' + encodeURIComponent(keyword.value))
@@ -204,7 +278,7 @@ function startCreate() {
 }
 
 function edit(row) {
-  Object.assign(form, blank(), row, { id: row.id, enabled: !!row.enabled })
+  Object.assign(form, blank(), row, { id: row.id, enabled: !!row.enabled, headersText: headersToText(row.headers), kind: row.kind || 'script' })
   error.value = ''
   formOpen.value = true
   refreshPreview()
@@ -237,9 +311,22 @@ async function save() {
     error.value = '演示模式不会写入服务器'
     return
   }
+  let headers = {}
+  if (form.kind === 'http') {
+    try {
+      headers = textToHeaders(form.headersText)
+    } catch (err) {
+      error.value = err.message
+      return
+    }
+  }
   saving.value = true
   try {
-    const body = { name: form.name, cron: form.cron, command: form.command, workDir: form.workDir, timeout: form.timeout, description: form.description, enabled: form.enabled }
+    const body = {
+      name: form.name, cron: form.cron, kind: form.kind || 'script', command: form.command, workDir: form.workDir,
+      url: form.url, method: form.method, bodyType: form.bodyType, headers, body: form.body,
+      timeout: form.timeout, description: form.description, enabled: form.enabled,
+    }
     if (form.id) await api('/api/cron-jobs/' + form.id, { method: 'PUT', body })
     else await api('/api/cron-jobs', { method: 'POST', body })
     formOpen.value = false

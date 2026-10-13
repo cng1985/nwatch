@@ -17,7 +17,7 @@ func (s *Server) listCronJobs(c *gin.Context) {
 	q := s.db.Model(&model.CronJob{})
 	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
 		like := "%" + kw + "%"
-		q = q.Where("name LIKE ? OR command LIKE ? OR cron LIKE ?", like, like, like)
+		q = q.Where("name LIKE ? OR command LIKE ? OR cron LIKE ? OR url LIKE ?", like, like, like, like)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
