@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -294,6 +295,17 @@ func TestHostScriptAndLogs(t *testing.T) {
 	rec := do(t, s, http.MethodGet, "/api/host?range=1h", token, nil)
 	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte("cpuPercent")) {
 		t.Fatalf("host %d %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, s, http.MethodGet, "/api/host/processes?sort=memory&limit=5", token, nil)
+	if runtime.GOOS == "linux" {
+		if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte(`"sort":"memory"`)) {
+			t.Fatalf("processes %d %s", rec.Code, rec.Body.String())
+		}
+	} else if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("processes %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(t, s, http.MethodGet, "/api/host/processes?limit=0", token, nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad limit %d %s", rec.Code, rec.Body.String())
 	}
 
 	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{

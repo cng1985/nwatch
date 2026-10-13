@@ -36,12 +36,16 @@ type Snapshot struct {
 	SampledAt   time.Time `json:"sampledAt"`
 }
 
-// Collector 读取本机 CPU、内存和磁盘。CPU 使用率需要相邻两次采样做差值。
+// Collector 读取本机 CPU、内存、磁盘和进程。CPU 使用率需要相邻两次采样做差值。
 type Collector struct {
-	mu        sync.Mutex
-	prevIdle  uint64
-	prevTotal uint64
-	hasPrev   bool
+	mu          sync.Mutex
+	prevIdle    uint64
+	prevTotal   uint64
+	hasPrev     bool
+	procBase    procBaseline
+	hasProc     bool
+	procCached  []Process
+	procCacheAt time.Time
 }
 
 func NewCollector() *Collector { return &Collector{} }

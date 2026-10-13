@@ -150,6 +150,7 @@ func (s *Server) routes() {
 	authed.GET("/export", s.exportConfig)
 	authed.POST("/import", s.importConfig)
 	authed.GET("/host", s.hostStatus)
+	authed.GET("/host/processes", s.hostProcesses)
 	authed.GET("/scripts/runs", s.listScriptRuns)
 	authed.GET("/scripts/runs/:id", s.getScriptRun)
 	authed.POST("/scripts/run", s.runScript)

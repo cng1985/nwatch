@@ -29,6 +29,49 @@
         <span class="bar" :class="tone(root.percent)"><i :style="{ width: root.percent + '%' }"></i></span>
       </div>
     </div>
+    <div class="card table-wrap" style="margin-bottom:14px">
+      <div class="card-title" style="padding:16px 16px 0">
+        <div>
+          <h2>进程</h2>
+          <p>{{ procSummary }}</p>
+        </div>
+        <div class="seg">
+          <button :class="{ on: procSort === 'cpu' }" @click="setSort('cpu')">按 CPU</button>
+          <button :class="{ on: procSort === 'memory' }" @click="setSort('memory')">按内存</button>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>PID</th>
+            <th>用户</th>
+            <th>进程</th>
+            <th><button class="sort-th" :class="{ on: procSort === 'cpu' }" @click="setSort('cpu')">CPU{{ procSort === 'cpu' ? ' ↓' : '' }}</button></th>
+            <th><button class="sort-th" :class="{ on: procSort === 'memory' }" @click="setSort('memory')">内存{{ procSort === 'memory' ? ' ↓' : '' }}</button></th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in processes" :key="row.pid">
+            <td class="pct">{{ row.pid }}</td>
+            <td>{{ row.user || '-' }}</td>
+            <td>
+              <div class="proc-cmd">
+                <b>{{ row.name || '-' }}</b>
+                <small v-if="row.command && row.command !== row.name">{{ row.command }}</small>
+              </div>
+            </td>
+            <td class="pct">{{ Number(row.cpuPercent || 0).toFixed(1) }}%</td>
+            <td>
+              <span class="bar" :class="tone(row.memPercent)"><i :style="{ width: Math.min(row.memPercent || 0, 100) + '%' }"></i></span>
+              <span class="pct">{{ bytes(row.memBytes) }} · {{ Number(row.memPercent || 0).toFixed(1) }}%</span>
+            </td>
+            <td>{{ row.stateText || row.state || '-' }}</td>
+          </tr>
+          <tr v-if="!processes.length"><td colspan="6" class="empty">{{ procError || (procLoaded ? '没有读到进程' : '读取中') }}</td></tr>
+        </tbody>
+      </table>
+    </div>
     <div class="card card-pad" style="margin-bottom:14px">
       <div class="card-title">
         <div><h2>使用率趋势</h2><p>三条曲线共用时间轴，虚线标出 70% 和 90%。采样约 15 秒一次，保留 7 天。</p></div>
@@ -66,6 +109,18 @@ import { bytes, duration, isDemo } from '../format'
 const ranges = [{ id: '1h', label: '1 小时' }, { id: '6h', label: '6 小时' }, { id: '24h', label: '24 小时' }, { id: '7d', label: '7 天' }]
 const range = ref('1h')
 const history = ref([])
+const processes = ref([])
+const procSort = ref('cpu')
+const procTotal = ref(0)
+const procLoaded = ref(false)
+const procError = ref('')
+const demoProcesses = [
+  { pid: 1842, user: 'www', name: 'java', command: 'java -jar erp.jar', state: 'S', stateText: '睡眠', cpuPercent: 86.4, memBytes: 1.8e9, memPercent: 11.2 },
+  { pid: 922, user: 'root', name: 'dockerd', command: 'dockerd --host=unix:///var/run/docker.sock', state: 'S', stateText: '睡眠', cpuPercent: 12.1, memBytes: 420e6, memPercent: 2.6 },
+  { pid: 4102, user: 'postgres', name: 'postgres', command: 'postgres: checkpointer', state: 'S', stateText: '睡眠', cpuPercent: 3.4, memBytes: 960e6, memPercent: 6.0 },
+  { pid: 88, user: 'root', name: 'systemd-journald', command: '/usr/lib/systemd/systemd-journald', state: 'S', stateText: '睡眠', cpuPercent: 0.6, memBytes: 84e6, memPercent: 0.5 },
+  { pid: 1, user: 'root', name: 'systemd', command: '/sbin/init', state: 'S', stateText: '睡眠', cpuPercent: 0.1, memBytes: 12e6, memPercent: 0.1 },
+]
 const current = reactive({
   hostname: '', cpuCount: 0, cpuPercent: 0, memPercent: 0, memUsed: 0, memTotal: 0,
   swapTotal: 0, swapPercent: 0, load1: 0, load5: 0, load15: 0, uptime: 0, disks: [],
@@ -75,10 +130,57 @@ const subtitle = computed(() => {
   const name = current.hostname || '本机'
   return `${name} · 已运行 ${duration(Math.floor(current.uptime || 0))}`
 })
+const procSummary = computed(() => {
+  const shown = processes.value.length
+  const total = procTotal.value || shown
+  const by = procSort.value === 'memory' ? '内存' : 'CPU'
+  if (!shown && !procLoaded.value) return '正在读取本机进程。'
+  return `共 ${total} 个，按 ${by} 从高到低显示 ${shown} 个。CPU 按单个核心计算，可以超过 100%。`
+})
 function tone(value) {
   if (value >= 90) return 'bad'
   if (value >= 70) return 'warn'
   return ''
+}
+
+function sortDemo(items) {
+  return [...items].sort((a, b) => {
+    if (procSort.value === 'memory') {
+      if (b.memBytes !== a.memBytes) return b.memBytes - a.memBytes
+      if (b.cpuPercent !== a.cpuPercent) return b.cpuPercent - a.cpuPercent
+    } else {
+      if (b.cpuPercent !== a.cpuPercent) return b.cpuPercent - a.cpuPercent
+      if (b.memBytes !== a.memBytes) return b.memBytes - a.memBytes
+    }
+    return a.pid - b.pid
+  })
+}
+
+function setSort(next) {
+  if (procSort.value === next) return
+  procSort.value = next
+  loadProcesses()
+}
+
+async function loadProcesses() {
+  if (isDemo()) {
+    processes.value = sortDemo(demoProcesses)
+    procTotal.value = demoProcesses.length
+    procError.value = ''
+    procLoaded.value = true
+    return
+  }
+  try {
+    const data = await api('/api/host/processes?sort=' + procSort.value)
+    processes.value = data.items || []
+    procTotal.value = data.total || processes.value.length
+    procError.value = ''
+  } catch (err) {
+    procError.value = err.message || '读取进程失败'
+    processes.value = []
+  } finally {
+    procLoaded.value = true
+  }
 }
 
 async function load() {
@@ -106,10 +208,14 @@ async function load() {
   history.value = data.history || []
 }
 
+async function refresh() {
+  await Promise.all([load(), loadProcesses()])
+}
+
 let timer
 onMounted(() => {
-  load()
-  timer = setInterval(load, 15000)
+  refresh()
+  timer = setInterval(refresh, 15000)
 })
 onUnmounted(() => clearInterval(timer))
 </script>
