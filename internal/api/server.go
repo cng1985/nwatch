@@ -21,6 +21,7 @@ import (
 	"github.com/cng1985/nwatch/internal/scheduler"
 	"github.com/cng1985/nwatch/internal/settings"
 	"github.com/cng1985/nwatch/internal/shell"
+	"github.com/cng1985/nwatch/internal/svcctl"
 	"github.com/cng1985/nwatch/internal/version"
 	"github.com/cng1985/nwatch/internal/web"
 	"github.com/gin-gonic/gin"
@@ -42,6 +43,7 @@ type Server struct {
 	logs      *logview.Store
 	cron      *cronjob.Service
 	shellHub  *shell.Hub
+	services  *svcctl.Manager
 	engine    *gin.Engine
 	http      *http.Server
 	started   time.Time
@@ -73,7 +75,8 @@ func NewServer(
 			MaxLifetime: cfg.Shell.MaxLifetime,
 			MaxSessions: cfg.Shell.MaxSessions,
 		}),
-		engine: gin.New(), started: time.Now(),
+		services: svcctl.New(cfg.Service.Enabled),
+		engine:   gin.New(), started: time.Now(),
 	}
 	s.engine.Use(gin.Recovery())
 	s.routes()
@@ -162,6 +165,11 @@ func (s *Server) routes() {
 	authed.GET("/cron-jobs/:id/runs", s.listCronRuns)
 	authed.GET("/cron-runs", s.listCronRunsQuery)
 	authed.GET("/logs", s.listLogs)
+	authed.GET("/services", s.listServices)
+	authed.POST("/services/:name/start", s.startService)
+	authed.POST("/services/:name/stop", s.stopService)
+	authed.POST("/services/:name/restart", s.restartService)
+	authed.GET("/services/:name/logs", s.serviceLogs)
 	authed.GET("/shell", s.shellInfo)
 	authed.POST("/shell/ticket", s.shellTicket)
 	s.engine.GET("/api/shell/ws", s.shellConnect)
