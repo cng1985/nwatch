@@ -160,6 +160,7 @@ func (s *Server) routes() {
 	authed.POST("/cron-jobs/:id/disable", s.disableCronJob)
 	authed.POST("/cron-jobs/:id/run", s.runCronJob)
 	authed.GET("/cron-jobs/:id/runs", s.listCronRuns)
+	authed.GET("/cron-runs", s.listCronRunsQuery)
 	authed.GET("/logs", s.listLogs)
 	authed.GET("/shell", s.shellInfo)
 	authed.POST("/shell/ticket", s.shellTicket)

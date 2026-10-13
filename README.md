@@ -132,6 +132,7 @@ POST            /api/cron-jobs/:id/run
 POST            /api/cron-jobs/:id/enable
 POST            /api/cron-jobs/:id/disable
 GET             /api/cron-jobs/:id/runs
+GET             /api/cron-runs
 GET             /api/cron/preview
 GET             /api/logs
 GET             /api/shell
@@ -152,6 +153,8 @@ GET             /api/shell/ws
 任务可以是脚本，也可以是网络请求。网络请求支持 GET、POST 表单和 POST JSON。表单按 `key=value` 发送，JSON 会带上 `Content-Type: application/json`。状态码在 200 到 299 之间算成功。
 
 执行时间使用系统配置中的时区。超时最长 1 小时，执行记录保留 30 天。任务还在跑时，下一次到点会被跳过，同一个任务不会并行执行。配置导入导出会带上这些任务。
+
+执行记录可以按任务、结果、触发方式、时间和关键字查询。`GET /api/cron-runs` 支持 `jobId`、`success`（`true` 或 `false`）、`trigger`（`schedule` 或 `manual`）、`keyword`、`from`、`to`。日期写成 `YYYY-MM-DD`，按系统时区的自然日，结束日期当天包含在内。单个任务的记录接口接受除 `jobId` 以外的同样条件。
 
 ## 测试
 
