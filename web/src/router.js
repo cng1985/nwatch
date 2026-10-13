@@ -4,6 +4,7 @@ import Layout from './components/Layout.vue'
 import Dashboard from './views/Dashboard.vue'
 import Resources from './views/Resources.vue'
 import Scripts from './views/Scripts.vue'
+import Cron from './views/Cron.vue'
 import Logs from './views/Logs.vue'
 import Monitors from './views/Monitors.vue'
 import MonitorEdit from './views/MonitorEdit.vue'
@@ -26,6 +27,7 @@ const router = createRouter({
         { path: '', component: Dashboard, meta: { crumbs: ['工作空间', '系统总览'], nav: '/' } },
         { path: 'resources', component: Resources, meta: { crumbs: ['工作空间', '主机资源'], nav: '/resources' } },
         { path: 'scripts', component: Scripts, meta: { crumbs: ['工作空间', '脚本执行'], nav: '/scripts' } },
+        { path: 'cron', component: Cron, meta: { crumbs: ['工作空间', '定时任务'], nav: '/cron' } },
         { path: 'shell', component: () => import('./views/Shell.vue'), meta: { crumbs: ['工作空间', '在线终端'], nav: '/shell' } },
         { path: 'monitors', component: Monitors, meta: { crumbs: ['工作空间', '监控列表'], nav: '/monitors' } },
         { path: 'monitors/new', component: MonitorEdit, meta: { crumbs: ['工作空间', '监控列表', '新增监控'], nav: '/monitors' } },

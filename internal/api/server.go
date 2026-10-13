@@ -14,6 +14,7 @@ import (
 	"github.com/cng1985/nwatch/internal/alert"
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/cronjob"
 	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/mailer"
@@ -39,6 +40,7 @@ type Server struct {
 	mail      *mailer.Service
 	collector *host.Collector
 	logs      *logview.Store
+	cron      *cronjob.Service
 	shellHub  *shell.Hub
 	engine    *gin.Engine
 	http      *http.Server
@@ -57,13 +59,14 @@ func NewServer(
 	mail *mailer.Service,
 	collector *host.Collector,
 	logs *logview.Store,
+	jobs *cronjob.Service,
 	lc fx.Lifecycle,
 ) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	s := &Server{
 		cfg: cfg, db: db, settings: store, tokens: tokens,
 		processor: processor, pool: pool, sched: sched, alerts: alerts, mail: mail,
-		collector: collector, logs: logs,
+		collector: collector, logs: logs, cron: jobs,
 		shellHub: shell.NewHub(shell.Options{
 			Enabled:     cfg.Shell.Enabled,
 			IdleTimeout: cfg.Shell.IdleTimeout,
@@ -147,6 +150,16 @@ func (s *Server) routes() {
 	authed.GET("/scripts/runs", s.listScriptRuns)
 	authed.GET("/scripts/runs/:id", s.getScriptRun)
 	authed.POST("/scripts/run", s.runScript)
+	authed.GET("/cron/preview", s.previewCron)
+	authed.GET("/cron-jobs", s.listCronJobs)
+	authed.POST("/cron-jobs", s.createCronJob)
+	authed.GET("/cron-jobs/:id", s.getCronJob)
+	authed.PUT("/cron-jobs/:id", s.updateCronJob)
+	authed.DELETE("/cron-jobs/:id", s.deleteCronJob)
+	authed.POST("/cron-jobs/:id/enable", s.enableCronJob)
+	authed.POST("/cron-jobs/:id/disable", s.disableCronJob)
+	authed.POST("/cron-jobs/:id/run", s.runCronJob)
+	authed.GET("/cron-jobs/:id/runs", s.listCronRuns)
 	authed.GET("/logs", s.listLogs)
 	authed.GET("/shell", s.shellInfo)
 	authed.POST("/shell/ticket", s.shellTicket)

@@ -19,6 +19,7 @@ config.yaml
 - TCP 端口连通性
 - 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
+- 定时任务：用 5 段 cron 表达式执行命令，记录输出。时间按系统配置里的时区计算，同一个任务不会重叠执行。支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
 - 运行日志：在管理台查看进程日志，保留 7 天
 - 调度器每秒领取到期任务，固定大小的工作池执行，同一个监控不会重叠检查
@@ -27,7 +28,7 @@ config.yaml
 - 邮件和所有已启用的通知渠道：连续失败达到阈值后，15 秒通知一次，45 秒再通知一次，之后每 1 分钟通知一次，直到服务恢复。关闭的渠道不发送。某一封邮件发送失败会持续重试，直到成功
 - 证书按 30/14/7/3/1/0 天阈值各提醒一次
 - 检测历史、分钟/小时/天统计、1 小时到 30 天可用率
-- Web 管理台：总览、主机资源、监控、脚本执行、在线终端、证书、告警、通知、运行日志、分组、系统配置
+- Web 管理台：总览、主机资源、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、系统配置
 - 管理员登录，默认密码可通过环境变量覆盖
 - 配置导入导出，SQLite 备份
 
@@ -125,6 +126,13 @@ GET             /api/certificates
 GET             /api/host
 POST            /api/scripts/run
 GET             /api/scripts/runs
+GET/POST        /api/cron-jobs
+GET/PUT/DELETE  /api/cron-jobs/:id
+POST            /api/cron-jobs/:id/run
+POST            /api/cron-jobs/:id/enable
+POST            /api/cron-jobs/:id/disable
+GET             /api/cron-jobs/:id/runs
+GET             /api/cron/preview
 GET             /api/logs
 GET             /api/shell
 POST            /api/shell/ticket
@@ -136,6 +144,12 @@ GET             /api/shell/ws
 管理台的「在线终端」通过 WebSocket 连接本机 Shell，执行身份与 NMonitor 进程相同。Linux 上启动 bash 或 sh；Windows 10 1809 及以上通过 ConPTY 启动 PowerShell，找不到时使用 cmd。页面先申请 30 秒内有效、只能使用一次的连接凭证，再升级连接，长期登录令牌不会出现在地址栏里。
 
 默认空闲 15 分钟断开，单次最长 4 小时，同时最多 8 个会话。可以在 `config.yaml` 的 `shell` 段调整，或用 `NMONITOR_SHELL_ENABLED=false` 关闭。跨站页面不能连接。会话的建立和断开会写进运行日志，按键内容不会记录。
+
+## 定时任务
+
+管理台的「定时任务」按 cron 表达式执行命令，例如 `0 2 * * *` 表示每天 02:00。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
+
+执行时间使用系统配置中的时区。命令超时最长 1 小时，执行记录保留 30 天。任务还在跑时，下一次到点会被跳过，同一个任务不会并行执行。配置导入导出会带上这些任务。
 
 ## 测试
 

@@ -60,6 +60,7 @@ const groups = [
     { to: '/resources', label: '主机资源', icon: 'cpu' },
     { to: '/monitors', label: '监控列表', icon: 'list' },
     { to: '/scripts', label: '脚本执行', icon: 'script' },
+    { to: '/cron', label: '定时任务', icon: 'clock' },
     { to: '/shell', label: '在线终端', icon: 'terminal' },
     { to: '/certificates', label: 'HTTPS 证书', icon: 'cert' },
   ] },

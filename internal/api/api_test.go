@@ -20,6 +20,7 @@ import (
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/cronjob"
 	"github.com/cng1985/nwatch/internal/database"
 	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/logview"
@@ -78,7 +79,9 @@ func newTestServer(t *testing.T) *Server {
 	sched := scheduler.NewScheduler(time.Hour, db, pool, nil)
 	sched.Start()
 	t.Cleanup(sched.Stop)
-	srv := NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, collector, logs, nil)
+	jobs := cronjob.New(db, store, time.Hour, nil)
+	t.Cleanup(jobs.Stop)
+	srv := NewServer(cfg, db, store, tokens, proc, pool, sched, alerts, mail, collector, logs, jobs, nil)
 	t.Cleanup(func() { srv.shellHub.Close() })
 	return srv
 }
