@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,24 @@ func (s *Server) hostStatus(c *gin.Context) {
 		}}
 	}
 	ok(c, gin.H{"current": snap, "history": history, "range": name})
+}
+
+func (s *Server) hostProcesses(c *gin.Context) {
+	limit := 0
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			fail(c, http.StatusBadRequest, "进程数量不正确")
+			return
+		}
+		limit = n
+	}
+	list, err := s.collector.Processes(c.Query("sort"), limit)
+	if err != nil {
+		fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	ok(c, list)
 }
 
 type scriptRunRequest struct {

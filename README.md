@@ -17,7 +17,7 @@ config.yaml
 - HTTP/HTTPS 检查：方法、请求头、状态码、响应内容、超时和响应时间
 - HTTPS 证书：到期时间、剩余天数、颁发机构、主机名和证书链
 - TCP 端口连通性
-- 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警
+- 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警。进程可按 CPU 或内存排序查看
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
 - 定时任务：用 5 段 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间按系统配置里的时区计算，同一个任务不会重叠执行
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
@@ -126,6 +126,7 @@ POST            /api/notifiers/:id/test
 GET             /api/events
 GET             /api/certificates
 GET             /api/host
+GET             /api/host/processes
 POST            /api/scripts/run
 GET             /api/scripts/runs
 GET/POST        /api/cron-jobs
@@ -154,6 +155,12 @@ GET             /api/shell/ws
 服务名只接受 systemd 的 service 单元，不能包含空格、路径或 shell 元字符。`systemd.service` 和 `init.service` 不能在这里操作。命令不经过 shell。启动、停止、重启和失败原因会写进运行日志。
 
 没有 `systemctl` 的环境仍可打开页面，接口会返回不可用原因。可以在 `config.yaml` 的 `service` 段设置 `enabled: false`，或用 `NMONITOR_SERVICE_ENABLED=false` 关闭。用 root 安装的 systemd 服务可以直接操作；普通用户可能因权限不足只能查看，或在操作时看到 systemctl 返回的拒绝信息。
+
+## 进程
+
+管理台的「主机资源」列出本机进程，可以按 CPU 或内存从高到低排序。CPU 按单个核心计算，多线程进程可以超过 100%。内存按常驻内存计算，并显示占物理内存的比例。列表约 15 秒刷新一次，默认显示占用最高的 80 个，最多 300 个。
+
+`GET /api/host/processes` 接受 `sort=cpu` 或 `sort=memory`，以及 `limit`。
 
 ## 在线终端
 

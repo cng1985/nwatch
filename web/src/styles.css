@@ -225,6 +225,11 @@ h1, h2, h3, p { margin: 0; }
 .table-wrap { overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
 th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.sort-th { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.sort-th.on { color: var(--text); }
+.proc-cmd { max-width: 520px; }
+.proc-cmd b, .proc-cmd small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proc-cmd small { color: var(--muted); font-size: 12px; margin-top: 2px; font-weight: 450; }
 td { padding: 14px 16px; border-bottom: 1px solid #f1f4f7; font-size: 14px; vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
 .name-cell { display: flex; align-items: center; gap: 10px; }
