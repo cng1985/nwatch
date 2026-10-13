@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -84,5 +86,48 @@ func TestCronJobAPI(t *testing.T) {
 	rec = do(t, s, http.MethodGet, "/api/cron-jobs?keyword="+url.QueryEscape("清理"), token, nil)
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "清理临时文件") || !strings.Contains(rec.Body.String(), "每天 00:00") {
 		t.Fatalf("list %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCronHTTPJobAPI(t *testing.T) {
+	s := newTestServer(t)
+	token := login(t, s)
+	var method, ctype, body string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		method, ctype, body = r.Method, r.Header.Get("Content-Type"), string(raw)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"pong":true}`))
+	}))
+	defer upstream.Close()
+
+	rec := do(t, s, http.MethodPost, "/api/cron-jobs", token, map[string]any{
+		"name": "回调", "cron": "0 3 * * *", "kind": "http", "method": "POST", "bodyType": "json",
+		"url": upstream.URL + "/hook", "body": `{"name":"nmonitor"}`, "headers": map[string]string{"X-Job": "cron"},
+		"timeout": 5,
+	})
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "POST JSON") {
+		t.Fatalf("create %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Data model.CronJob `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	id := strconv.FormatUint(uint64(created.Data.ID), 10)
+	rec = do(t, s, http.MethodPost, "/api/cron-jobs/"+id+"/run", token, nil)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"success":true`) || !strings.Contains(rec.Body.String(), "pong") {
+		t.Fatalf("run %d %s", rec.Code, rec.Body.String())
+	}
+	if method != http.MethodPost || ctype != "application/json" || body != `{"name":"nmonitor"}` {
+		t.Fatalf("method=%s type=%s body=%s", method, ctype, body)
+	}
+	rec = do(t, s, http.MethodPost, "/api/cron-jobs", token, map[string]any{
+		"name": "坏 JSON", "cron": "@hourly", "kind": "http", "method": "POST", "bodyType": "json",
+		"url": upstream.URL, "body": "{",
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid json %d %s", rec.Code, rec.Body.String())
 	}
 }

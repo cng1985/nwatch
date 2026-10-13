@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/settings"
 	"go.uber.org/fx"
@@ -201,32 +200,37 @@ func (s *Service) Run(id uint, trigger string) (*model.CronRun, error) {
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, timeout+time.Second)
 	defer cancel()
-	out := checker.Execute(ctx, job.Command, job.WorkDir, timeout)
-	row := record(&job, out, trigger)
-	if err := s.db.Create(&row).Error; err != nil {
-		_ = s.finish(&job, out, model.CronFailed, "保存执行记录失败")
-		return nil, err
-	}
+	out := runJob(ctx, &job, timeout)
 	status := model.CronSuccess
 	if out.TimedOut {
 		status = model.CronTimeout
-	} else if !row.Success {
+	} else if !out.Success {
 		status = model.CronFailed
 	}
-	if err := s.finish(&job, out, status, row.ErrorMessage); err != nil {
+	row := record(&job, out, trigger)
+	if err := s.db.Create(&row).Error; err != nil {
+		out.Message = "保存执行记录失败"
+		_ = s.finish(&job, out, model.CronFailed)
+		return nil, err
+	}
+	if err := s.finish(&job, out, status); err != nil {
 		return &row, err
 	}
 	Prune(s.db)
 	return &row, nil
 }
 
-func (s *Service) finish(job *model.CronJob, out checker.Output, status, message string) error {
-	if status == model.CronSuccess {
+func (s *Service) finish(job *model.CronJob, out outcome, status string) error {
+	message := out.Message
+	if status == model.CronSuccess && message == "" {
 		if line := firstLine(out.Stdout); line != "" {
 			message = line
 		} else {
 			message = "执行成功"
 		}
+	}
+	if status == model.CronSuccess && job.IsHTTP() && message == "" {
+		message = "执行成功"
 	}
 	if message == "" {
 		message = "执行失败"
@@ -241,24 +245,27 @@ func (s *Service) finish(job *model.CronJob, out checker.Output, status, message
 	}).Error
 }
 
-func record(job *model.CronJob, out checker.Output, trigger string) model.CronRun {
-	ok, judged := out.Judge("", "")
+func record(job *model.CronJob, out outcome, trigger string) model.CronRun {
 	message := ""
-	if !ok {
-		message = judged
+	if !out.Success {
+		message = out.Message
 	}
 	if trigger == "" {
 		trigger = model.CronTriggerSchedule
 	}
 	finished := time.Now()
+	command := job.Command
+	if job.IsHTTP() {
+		command = targetText(job)
+	}
 	return model.CronRun{
 		JobID:        job.ID,
 		Name:         job.Name,
 		Cron:         job.Cron,
-		Command:      job.Command,
+		Command:      command,
 		WorkDir:      job.WorkDir,
 		ExitCode:     out.ExitCode,
-		Success:      ok,
+		Success:      out.Success,
 		Stdout:       out.Stdout,
 		Stderr:       out.Stderr,
 		ErrorMessage: clip(message, 2000),
