@@ -18,13 +18,7 @@
               <option v-for="item in timeouts" :key="item[0]" :value="item[0]">{{ item[1] }}</option>
             </select>
           </label>
-          <label class="field"><span>常用计划</span>
-            <select class="select" style="width:100%" :value="presetValue" @change="applyPreset($event.target.value)">
-              <option value="">自定义</option>
-              <option v-for="item in presets" :key="item[0]" :value="item[0]">{{ item[1] }}</option>
-            </select>
-          </label>
-          <label class="field"><span class="req">Cron 表达式</span><input v-model="form.cron" class="text" placeholder="0 2 * * *" /></label>
+          <div class="full"><CronExpr v-model="form.cron" /></div>
           <label class="field full"><span>说明</span><input v-model="form.description" class="text" :placeholder="action === 'script' ? '每天凌晨清理 7 天前的临时文件' : '每天同步一次状态'" /></label>
           <div class="types full">
             <button v-for="item in actions" :key="item.id" type="button" class="type-card" :class="{ on: action === item.id }" @click="setAction(item.id)">
@@ -143,19 +137,11 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import CronExpr from '../components/CronExpr.vue'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
 import { clock, isDemo, relative } from '../format'
 
-const presets = [
-  ['* * * * *', '每分钟'],
-  ['*/5 * * * *', '每 5 分钟'],
-  ['*/15 * * * *', '每 15 分钟'],
-  ['0 * * * *', '每小时'],
-  ['0 2 * * *', '每天 02:00'],
-  ['0 9 * * 1', '每周一 09:00'],
-  ['0 0 1 * *', '每月 1 日 00:00'],
-]
 const timeouts = [[10, '10 秒'], [30, '30 秒'], [60, '1 分钟'], [120, '2 分钟'], [300, '5 分钟'], [600, '10 分钟'], [1800, '30 分钟'], [3600, '1 小时']]
 const actions = [
   { id: 'script', label: '脚本' },
@@ -188,7 +174,6 @@ const resultCodeLabel = computed(() => {
 })
 const runningId = ref(0)
 const form = reactive(blank())
-const presetValue = computed(() => presets.some((item) => item[0] === form.cron) ? form.cron : '')
 const action = computed(() => {
   if (form.kind !== 'http') return 'script'
   if (form.method === 'POST' && form.bodyType === 'json') return 'post_json'
@@ -329,10 +314,6 @@ function edit(row) {
   error.value = ''
   formOpen.value = true
   refreshPreview()
-}
-
-function applyPreset(value) {
-  if (value) form.cron = value
 }
 
 async function refreshPreview() {

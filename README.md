@@ -148,7 +148,7 @@ GET             /api/shell/ws
 
 ## 定时任务
 
-管理台的「定时任务」按 cron 表达式执行，例如 `0 2 * * *` 表示每天 02:00。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
+管理台的「定时任务」按 cron 表达式执行，例如 `0 2 * * *` 表示每天 02:00。新建和编辑时可以用 cron 组件按分、时、日、月、周选择任意、间隔、范围或指定值，也可以直接填写表达式。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
 
 任务可以是脚本，也可以是网络请求。网络请求支持 GET、POST 表单和 POST JSON。表单按 `key=value` 发送，JSON 会带上 `Content-Type: application/json`。状态码在 200 到 299 之间算成功。
 
