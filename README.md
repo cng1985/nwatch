@@ -163,13 +163,13 @@ GET             /api/shell/ws
 
 ## 定时任务
 
-管理台的「定时任务」按 cron 表达式执行，例如 `0 2 * * *` 表示每天 02:00。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
+管理台的「定时任务」按 cron 表达式执行，例如 `0 2 * * *` 表示每天 02:00。新建和编辑时可以用 cron 组件按分、时、日、月、周选择任意、间隔、范围或指定值，也可以直接填写表达式。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
 
 任务可以是脚本，也可以是网络请求。网络请求支持 GET、POST 表单和 POST JSON。表单按 `key=value` 发送，JSON 会带上 `Content-Type: application/json`。状态码在 200 到 299 之间算成功。
 
 执行时间使用系统配置中的时区。超时最长 1 小时，执行记录保留 30 天。任务还在跑时，下一次到点会被跳过，同一个任务不会并行执行。配置导入导出会带上这些任务。
 
-执行记录可以按任务、结果、触发方式、时间和关键字查询。`GET /api/cron-runs` 支持 `jobId`、`success`（`true` 或 `false`）、`trigger`（`schedule` 或 `manual`）、`keyword`、`from`、`to`。日期写成 `YYYY-MM-DD`，按系统时区的自然日，结束日期当天包含在内。单个任务的记录接口接受除 `jobId` 以外的同样条件。
+执行记录在页面右侧抽屉里查询，可按任务、结果、触发方式、时间和关键字筛选。`GET /api/cron-runs` 支持 `jobId`、`success`（`true` 或 `false`）、`trigger`（`schedule` 或 `manual`）、`keyword`、`from`、`to`。日期写成 `YYYY-MM-DD`，按系统时区的自然日，结束日期当天包含在内。单个任务的记录接口接受除 `jobId` 以外的同样条件。
 
 ## 测试
 

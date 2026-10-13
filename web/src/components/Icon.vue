@@ -13,6 +13,7 @@
     <path v-else-if="name === 'user'" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4M5 20a7 7 0 0 1 14 0" />
     <path v-else-if="name === 'logout'" d="M10 7V5a1 1 0 0 1 1-1h8v16h-8a1 1 0 0 1-1-1v-2M4 12h10M11 9l3 3-3 3" />
     <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
+    <path v-else-if="name === 'close'" d="M6 6l12 12M18 6 6 18" />
     <path v-else-if="name === 'globe'" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M3 12h18M12 3c2.5 2.8 2.5 15.2 0 18M12 3c-2.5 2.8-2.5 15.2 0 18" />
     <path v-else-if="name === 'lock'" d="M8 10V8a4 4 0 0 1 8 0v2M7 10h10v9H7z" />
     <path v-else-if="name === 'db'" d="M12 3c5 0 8 1.3 8 3s-3 3-8 3-8-1.3-8-3 3-3 8-3M4 6v6c0 1.7 3 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3 3 8 3s8-1.3 8-3v-6" />
