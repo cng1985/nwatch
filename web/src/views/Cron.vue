@@ -5,7 +5,10 @@
         <h1>定时任务</h1>
         <p>按 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间使用系统配置里的时区，同一任务不会重叠执行。</p>
       </div>
-      <button class="btn primary" @click="startCreate"><Icon name="plus" style="width:16px;height:16px" /> 新建任务</button>
+      <div class="head-actions">
+        <button class="btn ghost" @click="openAllRuns">执行记录</button>
+        <button class="btn primary" @click="startCreate"><Icon name="plus" style="width:16px;height:16px" /> 新建任务</button>
+      </div>
     </div>
 
     <div v-if="formOpen" class="editor">
@@ -80,58 +83,67 @@
       </table>
     </div>
 
-    <div class="card table-wrap" style="margin-top:14px">
-      <div class="card-title" style="padding:16px 16px 0">
-        <div>
-          <h2>执行记录</h2>
-          <p>{{ output ? runSummary(output) : '按任务、结果、触发方式和关键字查询。日期按系统时区，结束日期当天包含在内。' }}</p>
-        </div>
-        <button class="btn ghost" @click="loadRuns">刷新</button>
+    <Teleport to="body">
+      <div v-if="runsOpen" class="drawer-mask" @click.self="closeRuns">
+        <aside class="drawer" role="dialog" aria-modal="true" aria-label="执行记录">
+          <div class="drawer-head">
+            <div>
+              <h2>执行记录</h2>
+              <p>{{ output ? runSummary(output) : (selected ? selected.name + ' 的执行记录' : '按任务、结果、触发方式和关键字查询。日期按系统时区，结束日期当天包含在内。') }}</p>
+            </div>
+            <button class="drawer-close" type="button" aria-label="关闭" @click="closeRuns"><Icon name="close" /></button>
+          </div>
+          <div class="drawer-body">
+            <div class="drawer-filters">
+              <select v-model="runQuery.jobId" class="select">
+                <option value="">全部任务</option>
+                <option v-for="row in jobOptions" :key="row.id" :value="String(row.id)">{{ row.name }}</option>
+              </select>
+              <select v-model="runQuery.success" class="select">
+                <option value="">全部结果</option>
+                <option value="true">成功</option>
+                <option value="false">失败</option>
+              </select>
+              <select v-model="runQuery.trigger" class="select">
+                <option value="">全部触发</option>
+                <option value="schedule">定时</option>
+                <option value="manual">手动</option>
+              </select>
+              <label class="date-field">从<input v-model="runQuery.from" class="text date" type="date" /></label>
+              <label class="date-field">到<input v-model="runQuery.to" class="text date" type="date" /></label>
+              <input v-model="runQuery.keyword" class="search" placeholder="搜索名称、命令或输出" @keyup.enter="searchRuns" />
+              <div class="drawer-actions">
+                <button class="btn ghost" @click="searchRuns">查询</button>
+                <button class="btn ghost" @click="loadRuns">刷新</button>
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>时间</th><th>任务</th><th>触发</th><th>结果</th><th>{{ resultCodeLabel }}</th><th>耗时</th></tr></thead>
+              <tbody>
+                <tr v-for="row in runs" :key="row.id" class="clickable" :class="{ 'row-on': output && output.id === row.id }" @click="output = row">
+                  <td>{{ zoneClock(row.startedAt) }}</td>
+                  <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ firstLine(row.command) }}</small></td>
+                  <td>{{ row.trigger === 'manual' ? '手动' : '定时' }}</td>
+                  <td><span class="status" :class="row.success ? 'UP' : 'DOWN'">{{ row.success ? '成功' : '失败' }}</span></td>
+                  <td>{{ row.exitCode }}</td>
+                  <td>{{ row.durationMs }} ms</td>
+                </tr>
+                <tr v-if="!runs.length"><td colspan="6" class="empty">没有符合条件的执行记录</td></tr>
+              </tbody>
+            </table>
+            <div class="pager">
+              <button class="btn ghost" :disabled="runPage === 1" @click="turnRuns(-1)">上一页</button>
+              <span class="demo-note">{{ runTotal }} 条</span>
+              <button class="btn ghost" :disabled="runPage * runSize >= runTotal" @click="turnRuns(1)">下一页</button>
+            </div>
+            <div v-if="output" class="drawer-output">
+              <div class="log-box">{{ output.stdout || '（没有输出）' }}</div>
+              <div v-if="output.stderr" class="log-box">{{ output.stderr }}</div>
+            </div>
+          </div>
+        </aside>
       </div>
-      <div class="toolbar" style="padding:0 16px">
-        <select v-model="runQuery.jobId" class="select">
-          <option value="">全部任务</option>
-          <option v-for="row in jobOptions" :key="row.id" :value="String(row.id)">{{ row.name }}</option>
-        </select>
-        <select v-model="runQuery.success" class="select">
-          <option value="">全部结果</option>
-          <option value="true">成功</option>
-          <option value="false">失败</option>
-        </select>
-        <select v-model="runQuery.trigger" class="select">
-          <option value="">全部触发</option>
-          <option value="schedule">定时</option>
-          <option value="manual">手动</option>
-        </select>
-        <label class="date-field">从<input v-model="runQuery.from" class="text date" type="date" /></label>
-        <label class="date-field">到<input v-model="runQuery.to" class="text date" type="date" /></label>
-        <input v-model="runQuery.keyword" class="search" placeholder="搜索名称、命令或输出" @keyup.enter="searchRuns" />
-        <button class="btn ghost" @click="searchRuns">查询</button>
-      </div>
-      <table>
-        <thead><tr><th>时间</th><th>任务</th><th>触发</th><th>结果</th><th>{{ resultCodeLabel }}</th><th>耗时</th></tr></thead>
-        <tbody>
-          <tr v-for="row in runs" :key="row.id" class="clickable" :class="{ 'row-on': output && output.id === row.id }" @click="output = row">
-            <td>{{ zoneClock(row.startedAt) }}</td>
-            <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ firstLine(row.command) }}</small></td>
-            <td>{{ row.trigger === 'manual' ? '手动' : '定时' }}</td>
-            <td><span class="status" :class="row.success ? 'UP' : 'DOWN'">{{ row.success ? '成功' : '失败' }}</span></td>
-            <td>{{ row.exitCode }}</td>
-            <td>{{ row.durationMs }} ms</td>
-          </tr>
-          <tr v-if="!runs.length"><td colspan="6" class="empty">没有符合条件的执行记录</td></tr>
-        </tbody>
-      </table>
-      <div class="pager">
-        <button class="btn ghost" :disabled="runPage === 1" @click="turnRuns(-1)">上一页</button>
-        <span class="demo-note">{{ runTotal }} 条</span>
-        <button class="btn ghost" :disabled="runPage * runSize >= runTotal" @click="turnRuns(1)">下一页</button>
-      </div>
-      <div v-if="output" style="padding:0 16px 16px">
-        <div class="log-box">{{ output.stdout || '（没有输出）' }}</div>
-        <div v-if="output.stderr" class="log-box">{{ output.stderr }}</div>
-      </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -160,6 +172,7 @@ const error = ref('')
 const notice = ref('')
 const preview = ref(null)
 const selected = ref(null)
+const runsOpen = ref(false)
 const runs = ref([])
 const output = ref(null)
 const runPage = ref(1)
@@ -377,6 +390,7 @@ async function run(row) {
     output.value = await api('/api/cron-jobs/' + row.id + '/run', { method: 'POST' })
     selected.value = row
     runQuery.jobId = String(row.id)
+    runsOpen.value = true
     await searchRuns()
     await load()
   } catch (err) {
@@ -422,15 +436,33 @@ function demoRuns() {
   ]
 }
 
+function openAllRuns() {
+  selected.value = null
+  runQuery.jobId = ''
+  runsOpen.value = true
+  return searchRuns()
+}
+
+function closeRuns() {
+  runsOpen.value = false
+}
+
+function onKey(event) {
+  if (event.key === 'Escape' && runsOpen.value) closeRuns()
+}
+
 function pickJob(row) {
   selected.value = row
   runQuery.jobId = String(row.id)
+  runsOpen.value = true
   return searchRuns()
 }
 
 function searchRuns() {
   Object.assign(runFilter, runQuery)
   runPage.value = 1
+  selected.value = jobOptions.value.find((row) => String(row.id) === String(runQuery.jobId)) || selected.value
+  if (!runQuery.jobId) selected.value = null
   return loadRuns()
 }
 
@@ -484,8 +516,16 @@ onMounted(async () => {
     } catch { /* 列表仍可用，时间先按默认时区显示 */ }
   }
   await load()
-  await loadRuns()
-  timer = setInterval(() => { load(); loadRuns() }, 5000)
+  window.addEventListener('keydown', onKey)
+  timer = setInterval(() => { load(); if (runsOpen.value) loadRuns() }, 5000)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  window.removeEventListener('keydown', onKey)
+  document.body.style.overflow = ''
+})
+
+watch(runsOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
 </script>
