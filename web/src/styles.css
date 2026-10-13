@@ -285,6 +285,8 @@ tr.clickable { cursor: pointer; }
 }
 .search { min-width: 220px; }
 .select { min-width: 120px; }
+input.date { width: 150px; }
+.date-field { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 .text { width: 100%; }
 textarea.text { height: auto; padding: 10px 12px; }
 .pager { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; }

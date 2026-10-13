@@ -68,7 +68,7 @@
       <table>
         <thead><tr><th>任务</th><th>计划</th><th>状态</th><th>下次执行</th><th>最近执行</th><th>操作</th></tr></thead>
         <tbody>
-          <tr v-for="row in items" :key="row.id" class="clickable" :class="{ 'row-on': selected && selected.id === row.id }" @click="openRuns(row)">
+          <tr v-for="row in items" :key="row.id" class="clickable" :class="{ 'row-on': selected && selected.id === row.id }" @click="pickJob(row)">
             <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ targetOf(row) }}</small></td>
             <td>{{ row.scheduleText || row.cron }}<small style="display:block;color:#60707b">{{ row.cron }}</small></td>
             <td><span class="status" :class="statusOf(row).cls">{{ statusOf(row).text }}</span></td>
@@ -86,29 +86,55 @@
       </table>
     </div>
 
-    <div v-if="selected" class="card card-pad" style="margin-top:14px">
-      <div class="card-title">
+    <div class="card table-wrap" style="margin-top:14px">
+      <div class="card-title" style="padding:16px 16px 0">
         <div>
-          <h2>{{ selected.name }}</h2>
-          <p>{{ selected.lastMessage || (runs.length ? '以下是执行记录' : '还没有执行记录') }}</p>
+          <h2>执行记录</h2>
+          <p>{{ output ? runSummary(output) : '按任务、结果、触发方式和关键字查询。日期按系统时区，结束日期当天包含在内。' }}</p>
         </div>
-        <button class="btn ghost" @click="openRuns(selected)">刷新记录</button>
+        <button class="btn ghost" @click="loadRuns">刷新</button>
+      </div>
+      <div class="toolbar" style="padding:0 16px">
+        <select v-model="runQuery.jobId" class="select">
+          <option value="">全部任务</option>
+          <option v-for="row in jobOptions" :key="row.id" :value="String(row.id)">{{ row.name }}</option>
+        </select>
+        <select v-model="runQuery.success" class="select">
+          <option value="">全部结果</option>
+          <option value="true">成功</option>
+          <option value="false">失败</option>
+        </select>
+        <select v-model="runQuery.trigger" class="select">
+          <option value="">全部触发</option>
+          <option value="schedule">定时</option>
+          <option value="manual">手动</option>
+        </select>
+        <label class="date-field">从<input v-model="runQuery.from" class="text date" type="date" /></label>
+        <label class="date-field">到<input v-model="runQuery.to" class="text date" type="date" /></label>
+        <input v-model="runQuery.keyword" class="search" placeholder="搜索名称、命令或输出" @keyup.enter="searchRuns" />
+        <button class="btn ghost" @click="searchRuns">查询</button>
       </div>
       <table>
-        <thead><tr><th>时间</th><th>触发</th><th>结果</th><th>{{ selected.kind === 'http' ? '状态码' : '退出码' }}</th><th>耗时</th></tr></thead>
+        <thead><tr><th>时间</th><th>任务</th><th>触发</th><th>结果</th><th>{{ resultCodeLabel }}</th><th>耗时</th></tr></thead>
         <tbody>
           <tr v-for="row in runs" :key="row.id" class="clickable" :class="{ 'row-on': output && output.id === row.id }" @click="output = row">
             <td>{{ zoneClock(row.startedAt) }}</td>
+            <td><b>{{ row.name }}</b><small style="display:block;color:#60707b">{{ firstLine(row.command) }}</small></td>
             <td>{{ row.trigger === 'manual' ? '手动' : '定时' }}</td>
             <td><span class="status" :class="row.success ? 'UP' : 'DOWN'">{{ row.success ? '成功' : '失败' }}</span></td>
             <td>{{ row.exitCode }}</td>
             <td>{{ row.durationMs }} ms</td>
           </tr>
-          <tr v-if="!runs.length"><td colspan="5" class="empty">还没有执行记录</td></tr>
+          <tr v-if="!runs.length"><td colspan="6" class="empty">没有符合条件的执行记录</td></tr>
         </tbody>
       </table>
-      <div v-if="output" style="margin-top:14px">
-        <div class="log-box">{{ output.stdout || '（没有标准输出）' }}</div>
+      <div class="pager">
+        <button class="btn ghost" :disabled="runPage === 1" @click="turnRuns(-1)">上一页</button>
+        <span class="demo-note">{{ runTotal }} 条</span>
+        <button class="btn ghost" :disabled="runPage * runSize >= runTotal" @click="turnRuns(1)">下一页</button>
+      </div>
+      <div v-if="output" style="padding:0 16px 16px">
+        <div class="log-box">{{ output.stdout || '（没有输出）' }}</div>
         <div v-if="output.stderr" class="log-box">{{ output.stderr }}</div>
       </div>
     </div>
@@ -140,6 +166,7 @@ const actions = [
 
 const timezone = ref('Asia/Shanghai')
 const items = ref([])
+const jobOptions = ref([])
 const keyword = ref('')
 const formOpen = ref(false)
 const saving = ref(false)
@@ -149,6 +176,16 @@ const preview = ref(null)
 const selected = ref(null)
 const runs = ref([])
 const output = ref(null)
+const runPage = ref(1)
+const runTotal = ref(0)
+const runSize = 20
+const runQuery = reactive({ jobId: '', success: '', trigger: '', from: '', to: '', keyword: '' })
+const runFilter = reactive({ jobId: '', success: '', trigger: '', from: '', to: '', keyword: '' })
+const resultCodeLabel = computed(() => {
+  if (!runFilter.jobId) return '结果码'
+  const job = jobOptions.value.find((row) => String(row.id) === String(runFilter.jobId)) || selected.value
+  return job && job.kind === 'http' ? '状态码' : '退出码'
+})
 const runningId = ref(0)
 const form = reactive(blank())
 const presetValue = computed(() => presets.some((item) => item[0] === form.cron) ? form.cron : '')
@@ -235,6 +272,11 @@ function setAction(next) {
   if (next !== prev && (prev === 'post_json' || prev === 'post_form' || prev === 'get')) form.body = ''
 }
 
+function runSummary(row) {
+  if (row.errorMessage) return row.errorMessage
+  return row.success ? '执行成功' : '执行失败'
+}
+
 function statusOf(row) {
   if (!row.enabled) return { cls: 'PAUSED', text: '已停用' }
   return {
@@ -256,13 +298,18 @@ function demoItems() {
 async function load() {
   try {
     if (isDemo()) {
-      items.value = demoItems().filter((row) => !keyword.value || `${row.name} ${row.cron} ${row.command || ''} ${row.url || ''}`.includes(keyword.value))
+      jobOptions.value = demoItems()
+      items.value = jobOptions.value.filter((row) => !keyword.value || `${row.name} ${row.cron} ${row.command || ''} ${row.url || ''}`.includes(keyword.value))
       return
     }
-    const data = await api('/api/cron-jobs?pageSize=50&keyword=' + encodeURIComponent(keyword.value))
-    items.value = data.items || []
+    const [listed, options] = await Promise.all([
+      api('/api/cron-jobs?pageSize=50&keyword=' + encodeURIComponent(keyword.value)),
+      api('/api/cron-jobs?pageSize=200'),
+    ])
+    items.value = listed.items || []
+    jobOptions.value = options.items || []
     if (selected.value) {
-      const fresh = items.value.find((item) => item.id === selected.value.id)
+      const fresh = jobOptions.value.find((item) => item.id === selected.value.id)
       if (fresh) selected.value = fresh
     }
   } catch (err) {
@@ -348,7 +395,8 @@ async function run(row) {
   try {
     output.value = await api('/api/cron-jobs/' + row.id + '/run', { method: 'POST' })
     selected.value = row
-    await openRuns(row)
+    runQuery.jobId = String(row.id)
+    await searchRuns()
     await load()
   } catch (err) {
     notice.value = err.message
@@ -375,23 +423,71 @@ async function remove(row) {
     await api('/api/cron-jobs/' + row.id, { method: 'DELETE' })
     if (selected.value && selected.value.id === row.id) {
       selected.value = null
-      runs.value = []
       output.value = null
     }
+    if (runQuery.jobId === String(row.id)) runQuery.jobId = ''
+    if (runFilter.jobId === String(row.id)) runFilter.jobId = ''
     await load()
+    await loadRuns()
   } catch (err) {
     notice.value = err.message
   }
 }
 
-async function openRuns(row) {
+function demoRuns() {
+  return [
+    { id: 1, jobId: 1, name: '清理临时文件', command: 'find /tmp -type f -mtime +7 -delete', trigger: 'schedule', success: true, exitCode: 0, durationMs: 80, startedAt: new Date(Date.now() - 3600 * 1000).toISOString(), stdout: 'done', stderr: '', errorMessage: '' },
+    { id: 2, jobId: 2, name: '同步状态', command: 'POST JSON https://example.com/hook', trigger: 'manual', success: false, exitCode: 502, durationMs: 40, startedAt: new Date(Date.now() - 86400 * 1000).toISOString(), stdout: 'bad gateway', stderr: '', errorMessage: 'HTTP 502' },
+  ]
+}
+
+function pickJob(row) {
   selected.value = row
-  if (isDemo()) {
-    runs.value = [{ id: 1, startedAt: row.lastRunAt, trigger: 'schedule', success: row.lastStatus === 'SUCCESS', exitCode: row.lastStatus === 'SUCCESS' ? 0 : 1, durationMs: 80, stdout: row.lastStatus === 'SUCCESS' ? 'done' : '', stderr: '' }]
-    return
+  runQuery.jobId = String(row.id)
+  return searchRuns()
+}
+
+function searchRuns() {
+  Object.assign(runFilter, runQuery)
+  runPage.value = 1
+  return loadRuns()
+}
+
+function turnRuns(delta) {
+  const next = runPage.value + delta
+  if (next < 1 || (next - 1) * runSize >= runTotal.value) return
+  runPage.value = next
+  return loadRuns()
+}
+
+async function loadRuns() {
+  try {
+    if (isDemo()) {
+      let rows = demoRuns()
+      if (runFilter.jobId) rows = rows.filter((row) => String(row.jobId) === String(runFilter.jobId))
+      if (runFilter.success) rows = rows.filter((row) => String(row.success) === runFilter.success)
+      if (runFilter.trigger) rows = rows.filter((row) => row.trigger === runFilter.trigger)
+      const kw = runFilter.keyword.trim()
+      if (kw) rows = rows.filter((row) => `${row.name} ${row.command} ${row.stdout} ${row.stderr} ${row.errorMessage || ''}`.includes(kw))
+      if (runFilter.from) rows = rows.filter((row) => String(row.startedAt).slice(0, 10) >= runFilter.from)
+      if (runFilter.to) rows = rows.filter((row) => String(row.startedAt).slice(0, 10) <= runFilter.to)
+      runTotal.value = rows.length
+      runs.value = rows
+      if (output.value && !runs.value.some((row) => row.id === output.value.id)) output.value = null
+      return
+    }
+    const params = new URLSearchParams({ page: String(runPage.value), pageSize: String(runSize) })
+    for (const key of ['jobId', 'success', 'trigger', 'from', 'to', 'keyword']) {
+      const value = String(runFilter[key] || '').trim()
+      if (value) params.set(key, value)
+    }
+    const data = await api('/api/cron-runs?' + params.toString())
+    runs.value = data.items || []
+    runTotal.value = data.total || 0
+    if (output.value && !runs.value.some((row) => row.id === output.value.id)) output.value = null
+  } catch (err) {
+    notice.value = err.message
   }
-  const data = await api('/api/cron-jobs/' + row.id + '/runs?pageSize=20')
-  runs.value = data.items || []
 }
 
 watch(() => form.cron, () => {
@@ -407,7 +503,8 @@ onMounted(async () => {
     } catch { /* 列表仍可用，时间先按默认时区显示 */ }
   }
   await load()
-  timer = setInterval(load, 5000)
+  await loadRuns()
+  timer = setInterval(() => { load(); loadRuns() }, 5000)
 })
 onUnmounted(() => clearInterval(timer))
 </script>

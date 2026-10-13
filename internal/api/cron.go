@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -166,8 +167,61 @@ func (s *Server) listCronRuns(c *gin.Context) {
 		fail(c, http.StatusNotFound, "定时任务不存在")
 		return
 	}
+	s.queryCronRuns(c, &id)
+}
+
+func (s *Server) listCronRunsQuery(c *gin.Context) {
+	var jobID *uint
+	if raw := strings.TrimSpace(c.Query("jobId")); raw != "" {
+		n, err := strconv.ParseUint(raw, 10, 64)
+		if err != nil || n == 0 {
+			fail(c, http.StatusBadRequest, "任务编号不正确")
+			return
+		}
+		id := uint(n)
+		jobID = &id
+	}
+	s.queryCronRuns(c, jobID)
+}
+
+func (s *Server) queryCronRuns(c *gin.Context, jobID *uint) {
 	page, size := pageParams(c)
-	q := s.db.Model(&model.CronRun{}).Where("job_id = ?", id)
+	q := s.db.Model(&model.CronRun{})
+	if jobID != nil {
+		q = q.Where("job_id = ?", *jobID)
+	}
+	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("name LIKE ? OR command LIKE ? OR stdout LIKE ? OR stderr LIKE ? OR error_message LIKE ?", like, like, like, like, like)
+	}
+	switch c.Query("success") {
+	case "":
+	case "true":
+		q = q.Where("success = ?", true)
+	case "false":
+		q = q.Where("success = ?", false)
+	default:
+		fail(c, http.StatusBadRequest, "结果条件不正确")
+		return
+	}
+	if trigger := strings.TrimSpace(c.Query("trigger")); trigger != "" {
+		if trigger != model.CronTriggerManual && trigger != model.CronTriggerSchedule {
+			fail(c, http.StatusBadRequest, "触发方式不正确")
+			return
+		}
+		q = q.Where("trigger = ?", trigger)
+	}
+	from, to, err := runWindow(c.Query("from"), c.Query("to"), s.settings.Location())
+	if err != nil {
+		fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !from.IsZero() {
+		q = q.Where("started_at >= ?", from)
+	}
+	if !to.IsZero() {
+		q = q.Where("started_at < ?", to)
+	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		fail(c, http.StatusInternalServerError, "查询失败")
@@ -179,6 +233,51 @@ func (s *Server) listCronRuns(c *gin.Context) {
 		return
 	}
 	ok(c, gin.H{"items": items, "total": total})
+}
+
+// runWindow 把查询时间转成 [from, to)。日期按系统时区的自然日，to 当天包含在内。
+func runWindow(fromRaw, toRaw string, loc *time.Location) (time.Time, time.Time, error) {
+	from, err := parseRunBound(fromRaw, loc, false)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	to, err := parseRunBound(toRaw, loc, true)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	if !from.IsZero() && !to.IsZero() && !to.After(from) {
+		return time.Time{}, time.Time{}, errors.New("结束时间需要晚于开始时间")
+	}
+	return from, to, nil
+}
+
+func parseRunBound(raw string, loc *time.Location, end bool) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	if loc == nil {
+		loc = time.Local
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		if end {
+			return t.Add(time.Second), nil
+		}
+		return t, nil
+	}
+	if t, err := time.ParseInLocation("2006-01-02 15:04:05", raw, loc); err == nil {
+		if end {
+			return t.Add(time.Second), nil
+		}
+		return t, nil
+	}
+	if t, err := time.ParseInLocation("2006-01-02", raw, loc); err == nil {
+		if end {
+			return t.AddDate(0, 0, 1), nil
+		}
+		return t, nil
+	}
+	return time.Time{}, errors.New("时间格式不正确，使用 YYYY-MM-DD")
 }
 
 func (s *Server) previewCron(c *gin.Context) {
