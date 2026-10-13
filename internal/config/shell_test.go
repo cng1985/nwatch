@@ -43,3 +43,40 @@ func TestShellConfig(t *testing.T) {
 		t.Fatal("env should enable shell")
 	}
 }
+
+func TestServiceConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte("server:\n  port: 8091\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NMONITOR_CONFIG", path)
+	t.Setenv("NMONITOR_SERVICE_ENABLED", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Service.Enabled {
+		t.Fatal("service should be enabled by default")
+	}
+
+	if err := os.WriteFile(path, []byte("service:\n  enabled: false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Service.Enabled {
+		t.Fatal("yaml should disable service")
+	}
+
+	t.Setenv("NMONITOR_SERVICE_ENABLED", "true")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Service.Enabled {
+		t.Fatal("env should enable service")
+	}
+}

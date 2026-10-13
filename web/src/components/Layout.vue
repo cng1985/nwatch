@@ -58,6 +58,7 @@ const groups = [
   { label: '工作空间', items: [
     { to: '/', label: '系统总览', icon: 'home' },
     { to: '/resources', label: '主机资源', icon: 'cpu' },
+    { to: '/services', label: '系统服务', icon: 'service' },
     { to: '/monitors', label: '监控列表', icon: 'list' },
     { to: '/scripts', label: '脚本执行', icon: 'script' },
     { to: '/cron', label: '定时任务', icon: 'clock' },

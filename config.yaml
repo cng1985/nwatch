@@ -49,3 +49,8 @@ shell:
   idle_timeout: 15m
   max_lifetime: 4h
   max_sessions: 8
+
+# 管理台里的系统服务。通过本机 systemctl 启动、停止，并用 journalctl 查看日志。
+# 身份与 NMonitor 进程相同。没有 systemd 时页面会提示不可用。
+service:
+  enabled: true
