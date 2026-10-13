@@ -3,6 +3,7 @@ package transfer
 import (
 	"time"
 
+	"github.com/cng1985/nwatch/internal/cronjob"
 	"github.com/cng1985/nwatch/internal/model"
 	"gorm.io/gorm"
 )
@@ -13,6 +14,7 @@ type Bundle struct {
 	Groups     []GroupItem    `json:"groups"`
 	Notifiers  []NotifierItem `json:"notifiers"`
 	Monitors   []MonitorItem  `json:"monitors"`
+	CronJobs   []CronItem     `json:"cronJobs"`
 }
 
 type GroupItem struct {
@@ -54,10 +56,21 @@ type MonitorItem struct {
 	Notifiers           []string          `json:"notifiers,omitempty"`
 }
 
+type CronItem struct {
+	Name        string `json:"name"`
+	Cron        string `json:"cron"`
+	Command     string `json:"command"`
+	WorkDir     string `json:"workDir,omitempty"`
+	Timeout     int    `json:"timeout"`
+	Description string `json:"description,omitempty"`
+	Enabled     bool   `json:"enabled"`
+}
+
 func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 	var groups []model.Group
 	var notifiers []model.Notifier
 	var monitors []model.Monitor
+	var jobs []model.CronJob
 	if err := db.Order("sort, id").Find(&groups).Error; err != nil {
 		return Bundle{}, err
 	}
@@ -65,6 +78,9 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 		return Bundle{}, err
 	}
 	if err := db.Preload("Group").Preload("Notifiers").Order("id").Find(&monitors).Error; err != nil {
+		return Bundle{}, err
+	}
+	if err := db.Order("id").Find(&jobs).Error; err != nil {
 		return Bundle{}, err
 	}
 	out := Bundle{Version: 1, ExportedAt: time.Now()}
@@ -96,6 +112,12 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 		}
 		out.Monitors = append(out.Monitors, item)
 	}
+	for _, job := range jobs {
+		out.CronJobs = append(out.CronJobs, CronItem{
+			Name: job.Name, Cron: job.Cron, Command: job.Command, WorkDir: job.WorkDir,
+			Timeout: job.Timeout, Description: job.Description, Enabled: job.Enabled,
+		})
+	}
 	if out.Groups == nil {
 		out.Groups = []GroupItem{}
 	}
@@ -104,6 +126,9 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 	}
 	if out.Monitors == nil {
 		out.Monitors = []MonitorItem{}
+	}
+	if out.CronJobs == nil {
+		out.CronJobs = []CronItem{}
 	}
 	return out, nil
 }
@@ -217,6 +242,35 @@ func Import(db *gorm.DB, b Bundle) error {
 				}
 			}
 			if err := tx.Model(&row).Association("Notifiers").Replace(links); err != nil {
+				return err
+			}
+		}
+		for _, item := range b.CronJobs {
+			if item.Name == "" {
+				continue
+			}
+			enabled := item.Enabled
+			req := cronjob.Request{
+				Name: item.Name, Cron: item.Cron, Command: item.Command, WorkDir: item.WorkDir,
+				Timeout: item.Timeout, Description: item.Description, Enabled: &enabled,
+			}
+			if err := req.Normalize(); err != nil {
+				return err
+			}
+			var row model.CronJob
+			err := tx.Where("name = ?", req.Name).First(&row).Error
+			creating := err == gorm.ErrRecordNotFound
+			if err != nil && !creating {
+				return err
+			}
+			if err := req.Apply(&row, time.Now()); err != nil {
+				return err
+			}
+			if creating {
+				if err := tx.Create(&row).Error; err != nil {
+					return err
+				}
+			} else if err := tx.Save(&row).Error; err != nil {
 				return err
 			}
 		}

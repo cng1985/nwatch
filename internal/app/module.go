@@ -6,6 +6,7 @@ import (
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/checker"
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/cronjob"
 	"github.com/cng1985/nwatch/internal/database"
 	"github.com/cng1985/nwatch/internal/host"
 	"github.com/cng1985/nwatch/internal/logview"
@@ -34,6 +35,7 @@ var Module = fx.Options(
 	alert.Module,
 	metric.Module,
 	scheduler.Module,
+	cronjob.Module,
 	maintenance.Module,
 	auth.Module,
 	api.Module,

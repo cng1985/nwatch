@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/cronjob"
 	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/settings"
 	"go.uber.org/fx"
@@ -65,6 +66,7 @@ func (s *Service) RunOnce() {
 	s.purge(&model.MonitorCheck{}, "checked_at", now.AddDate(0, 0, -snap.CheckRetentionDays))
 	s.purge(&model.AlertEvent{}, "occurred_at", now.AddDate(0, 0, -snap.EventRetentionDays))
 	s.purge(&model.NotificationLog{}, "sent_at", now.AddDate(0, 0, -snap.EventRetentionDays))
+	cronjob.Prune(s.db)
 	if err := s.db.Where("bucket_type = ? AND bucket_time < ?", model.BucketMinute, now.AddDate(0, 0, -snap.MetricRetentionDays)).
 		Delete(&model.MonitorMetric{}).Error; err != nil {
 		slog.Error("清理分钟统计失败", "err", err.Error())

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -235,6 +236,7 @@ func (s *Server) updateSettings(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "时区无效")
 		return
 	}
+	previousZone := s.settings.Snapshot().Timezone
 	if req.CheckRetentionDays < 1 || req.EventRetentionDays < 1 || req.MetricRetentionDays < 1 || req.HourMetricRetentionDays < 1 {
 		fail(c, http.StatusBadRequest, "保留天数至少为 1")
 		return
@@ -255,6 +257,11 @@ func (s *Server) updateSettings(c *gin.Context) {
 	if err != nil {
 		fail(c, http.StatusInternalServerError, "保存失败")
 		return
+	}
+	if previousZone != req.Timezone {
+		if err := s.cron.RescheduleAll(); err != nil {
+			slog.Error("重算定时任务失败", "err", err.Error())
+		}
 	}
 	s.getSettings(c)
 }
@@ -305,6 +312,10 @@ func (s *Server) importConfig(c *gin.Context) {
 	}
 	if err := transfer.Import(s.db, bundle); err != nil {
 		fail(c, http.StatusBadRequest, "导入失败："+err.Error())
+		return
+	}
+	if err := s.cron.RescheduleAll(); err != nil {
+		fail(c, http.StatusInternalServerError, "导入后重算定时任务失败")
 		return
 	}
 	ok(c, gin.H{"ok": true})
