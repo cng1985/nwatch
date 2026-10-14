@@ -1,11 +1,13 @@
 package rbac
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/database"
+	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/settings"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -99,6 +101,76 @@ func TestEnsureKeepsExistingPasswordAndRoles(t *testing.T) {
 	admin, err := store.UpdateRole(roles[0].ID, RoleInput{Name: roles[0].Name, Permissions: []string{PermLogRead}})
 	if err != nil || !containsPerm(admin.Permissions, PermAccessWrite) || !containsPerm(admin.Permissions, PermShellUse) {
 		t.Fatalf("admin role must keep every permission: %+v %v", admin.Permissions, err)
+	}
+}
+
+func TestEnsureUpgradesLegacyBuiltinPerms(t *testing.T) {
+	store, cfg, prefs := testStore(t, "test-pass")
+	roles, err := store.ListRoles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var operatorID, viewerID uint
+	for _, role := range roles {
+		if role.Key == RoleOperator {
+			operatorID = role.ID
+			if !containsPerm(role.Permissions, PermDockerWrite) || !containsPerm(role.Permissions, PermKubeWrite) {
+				t.Fatalf("fresh operator %+v", role.Permissions)
+			}
+		}
+		if role.Key == RoleViewer {
+			viewerID = role.ID
+			if !containsPerm(role.Permissions, PermDockerRead) || containsPerm(role.Permissions, PermDockerWrite) {
+				t.Fatalf("fresh viewer %+v", role.Permissions)
+			}
+		}
+	}
+	raw, err := json.Marshal(legacyOperatorPerms())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.Model(&model.Role{}).Where("key = ?", RoleOperator).Update("permissions", string(raw)).Error; err != nil {
+		t.Fatal(err)
+	}
+	viewRaw, err := json.Marshal(legacyViewerPerms())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.Model(&model.Role{}).Where("key = ?", RoleViewer).Update("permissions", string(viewRaw)).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Ensure(cfg, prefs); err != nil {
+		t.Fatal(err)
+	}
+	roles, err = store.ListRoles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range roles {
+		if role.Key == RoleOperator && !containsPerm(role.Permissions, PermDockerWrite) {
+			t.Fatalf("operator not upgraded %+v", role.Permissions)
+		}
+		if role.Key == RoleViewer && !containsPerm(role.Permissions, PermKubeRead) {
+			t.Fatalf("viewer not upgraded %+v", role.Permissions)
+		}
+	}
+	if _, err := store.UpdateRole(operatorID, RoleInput{Name: "运维", Permissions: []string{PermLogRead}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateRole(viewerID, RoleInput{Name: "只读", Permissions: []string{PermCertRead}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Ensure(cfg, prefs); err != nil {
+		t.Fatal(err)
+	}
+	roles, _ = store.ListRoles()
+	for _, role := range roles {
+		if role.Key == RoleOperator && (len(role.Permissions) != 1 || role.Permissions[0] != PermLogRead) {
+			t.Fatalf("custom operator reset %+v", role.Permissions)
+		}
+		if role.Key == RoleViewer && (len(role.Permissions) != 1 || role.Permissions[0] != PermCertRead) {
+			t.Fatalf("custom viewer reset %+v", role.Permissions)
+		}
 	}
 }
 

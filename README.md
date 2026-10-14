@@ -22,6 +22,8 @@ config.yaml
 - 定时任务：用 5 段 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间按系统配置里的时区计算，同一个任务不会重叠执行
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
 - 系统服务：在管理台列出本机 systemd 服务，启动、停止、重启，并用 journalctl 查看日志
+- Docker：列出本机容器和镜像，启动、停止、重启容器，并查看日志
+- Kubernetes：列出 Pod、Deployment、StatefulSet、DaemonSet 和 Service，滚动重启、调整副本，删除 Pod，并查看 Pod 日志
 - 运行日志：在管理台查看进程日志，保留 7 天
 - 调度器每秒领取到期任务，固定大小的工作池执行，同一个监控不会重叠检查
 - 连续失败后才标记为异常，恢复也可要求连续成功
@@ -29,7 +31,7 @@ config.yaml
 - 邮件和所有已启用的通知渠道：连续失败达到阈值后，15 秒通知一次，45 秒再通知一次，之后每 1 分钟通知一次，直到服务恢复。关闭的渠道不发送。某一封邮件发送失败会持续重试，直到成功
 - 证书按 30/14/7/3/1/0 天阈值各提醒一次
 - 检测历史、分钟/小时/天统计、1 小时到 30 天可用率
-- Web 管理台：总览、主机资源、系统服务、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、用户与角色、系统配置
+- Web 管理台：总览、主机资源、系统服务、Docker、Kubernetes、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、用户与角色、系统配置
 - 基于角色的访问控制：内置管理员、运维、只读，也可以自定义角色。一个用户可以有多个角色，菜单和接口都按权限控制
 - 配置导入导出，SQLite 备份
 
@@ -57,6 +59,8 @@ internal/cronjob/         cron 表达式、脚本和 HTTP 定时任务
 internal/host/            本机 CPU、内存、磁盘和进程采集
 internal/shell/           在线终端会话和一次性连接凭证
 internal/svcctl/          调用 systemctl 和 journalctl
+internal/dockerctl/       调用 docker 管理容器和镜像
+internal/k8sctl/          调用 kubectl 管理 Kubernetes
 internal/logview/         写入并查询进程日志
 internal/maintenance/     数据库备份和历史清理
 internal/auth/            登录和 JWT
@@ -66,7 +70,7 @@ internal/transfer/        配置导入导出
 internal/web/             嵌入前端构建产物
 internal/version/         版本号
 web/                      Vue 3 管理台
-  src/views/              总览、资源、服务、监控、证书、告警、通知、日志、用户与角色、配置等页面
+  src/views/              总览、资源、服务、Docker、Kubernetes、监控、证书、告警、通知、日志、用户与角色、配置等页面
   src/components/         布局、图表、cron 表达式
   src/api.js              接口调用
   src/router.js           路由和登录拦截
@@ -112,6 +116,10 @@ NMONITOR_SMTP_TO
 NMONITOR_SMTP_ENCRYPTION
 NMONITOR_SHELL_ENABLED
 NMONITOR_SERVICE_ENABLED
+NMONITOR_DOCKER_ENABLED
+NMONITOR_KUBERNETES_ENABLED
+NMONITOR_KUBE_CONTEXT
+NMONITOR_KUBECONFIG
 ```
 
 `NMONITOR_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。
@@ -186,6 +194,18 @@ POST            /api/services/:name/start
 POST            /api/services/:name/stop
 POST            /api/services/:name/restart
 GET             /api/services/:name/logs
+GET             /api/docker/containers
+GET             /api/docker/images
+POST            /api/docker/containers/:name/start
+POST            /api/docker/containers/:name/stop
+POST            /api/docker/containers/:name/restart
+GET             /api/docker/containers/:name/logs
+GET             /api/kubernetes/namespaces
+GET             /api/kubernetes/resources
+GET             /api/kubernetes/pods/:namespace/:name/logs
+POST            /api/kubernetes/pods/:namespace/:name/delete
+POST            /api/kubernetes/workloads/:kind/:namespace/:name/restart
+POST            /api/kubernetes/workloads/:kind/:namespace/:name/scale
 GET             /api/shell
 POST            /api/shell/ticket
 GET             /api/shell/ws
@@ -203,6 +223,22 @@ GET/PUT/DELETE  /api/access/users/:id
 服务名只接受 systemd 的 service 单元，不能包含空格、路径或 shell 元字符。`systemd.service` 和 `init.service` 不能在这里操作。命令不经过 shell。启动、停止、重启和失败原因会写进运行日志。
 
 没有 `systemctl` 的环境仍可打开页面，接口会返回不可用原因。可以在 `config.yaml` 的 `service` 段设置 `enabled: false`，或用 `NMONITOR_SERVICE_ENABLED=false` 关闭。用 root 安装的 systemd 服务可以直接操作；普通用户可能因权限不足只能查看，或在操作时看到 systemctl 返回的拒绝信息。
+
+## Docker
+
+管理台的「Docker」调用本机 `docker` 客户端列出容器和镜像。容器可以启动、停止、重启，日志通过 `docker logs` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同，命令不经过 shell。
+
+容器名只接受字母、数字、下划线、点和横线，不能以横线开头，也不能包含空格或路径。这里不进入容器，也不删除容器或镜像。
+
+没有 `docker` 或连不上守护进程时，页面会提示不可用。可以在 `config.yaml` 的 `docker` 段设置 `enabled: false`，或用 `NMONITOR_DOCKER_ENABLED=false` 关闭。NMonitor 跑在容器里时，需要镜像内有 docker 客户端，并且能访问宿主机的 Docker 套接字，才会看到宿主机上的容器。
+
+## Kubernetes
+
+管理台的「Kubernetes」调用本机 `kubectl`。可以按命名空间查看 Pod、Deployment、StatefulSet、DaemonSet 和 Service。Deployment、StatefulSet 和 DaemonSet 可以滚动重启，前两类还可以把副本数改成 0 到 64。删除 Pod 后由控制器重建。Pod 日志通过 `kubectl logs` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同，命令不经过 shell。
+
+名称只接受 Kubernetes 的 DNS 名称。这里不提供进入容器的终端。
+
+`kubernetes.context` 和 `kubernetes.kubeconfig` 留空时使用当前环境的默认 kubeconfig。也可以用 `NMONITOR_KUBE_CONTEXT` 和 `NMONITOR_KUBECONFIG` 覆盖。没有 `kubectl`，或 kubeconfig 不能访问集群时，页面会提示原因。可以设置 `kubernetes.enabled: false`，或用 `NMONITOR_KUBERNETES_ENABLED=false` 关闭。
 
 ## 进程
 
@@ -233,8 +269,8 @@ GET/PUT/DELETE  /api/access/users/:id
 管理台的「用户与角色」用来分配谁能看、谁能改。首次启动会创建三个内置角色，并把原来的管理员账号放进「管理员」：
 
 - 管理员：全部权限，包含系统配置、在线终端和账号管理
-- 运维：管理监控、分组、通知、脚本、定时任务和系统服务，可以查看系统配置。不能修改配置、打开在线终端或管理账号
-- 只读：查看监控、主机、告警、通知和运行日志
+- 运维：管理监控、分组、通知、脚本、定时任务、系统服务、Docker 和 Kubernetes，可以查看系统配置。不能修改配置、打开在线终端或管理账号
+- 只读：查看监控、主机、告警、通知、运行日志、Docker 和 Kubernetes
 
 内置角色不能删除，管理员角色始终拥有全部权限。运维和只读的权限可以调整。也可以新建角色，勾选需要的权限。一个用户可以同时拥有多个角色，能做的事是这些角色的并集。
 
@@ -243,6 +279,8 @@ GET/PUT/DELETE  /api/access/users/:id
 原来的 `NMONITOR_USERNAME` 和 `NMONITOR_PASSWORD` 只用于创建第一个管理员。如果系统配置里已经保存过密码，会继续使用那份密码。之后在页面上修改这个账号的密码，启动提示也会跟着更新。
 
 没有对应权限时，菜单里不显示入口，直接调用接口会返回 403。
+
+管理员角色会在启动时同步全部权限。已经存在的运维、只读角色如果还是原来的默认权限，启动时会补上 Docker 和 Kubernetes；权限已经被改过的角色保持原样，需要在「用户与角色」里另行勾选。
 
 ## 测试
 

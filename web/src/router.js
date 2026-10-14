@@ -4,6 +4,8 @@ import Layout from './components/Layout.vue'
 import Dashboard from './views/Dashboard.vue'
 import Resources from './views/Resources.vue'
 import Services from './views/Services.vue'
+import Docker from './views/Docker.vue'
+import Kubernetes from './views/Kubernetes.vue'
 import Scripts from './views/Scripts.vue'
 import Cron from './views/Cron.vue'
 import Logs from './views/Logs.vue'
@@ -32,6 +34,8 @@ const router = createRouter({
         { path: '', component: Dashboard, meta: { crumbs: ['工作空间', '系统总览'], nav: '/', perm: 'dashboard.read' } },
         { path: 'resources', component: Resources, meta: { crumbs: ['工作空间', '主机资源'], nav: '/resources', perm: 'host.read' } },
         { path: 'services', component: Services, meta: { crumbs: ['工作空间', '系统服务'], nav: '/services', perm: 'service.read' } },
+        { path: 'docker', component: Docker, meta: { crumbs: ['工作空间', 'Docker'], nav: '/docker', perm: 'docker.read' } },
+        { path: 'kubernetes', component: Kubernetes, meta: { crumbs: ['工作空间', 'Kubernetes'], nav: '/kubernetes', perm: 'kube.read' } },
         { path: 'scripts', component: Scripts, meta: { crumbs: ['工作空间', '脚本执行'], nav: '/scripts', perm: 'script.read' } },
         { path: 'cron', component: Cron, meta: { crumbs: ['工作空间', '定时任务'], nav: '/cron', perm: 'cron.read' } },
         { path: 'shell', component: () => import('./views/Shell.vue'), meta: { crumbs: ['工作空间', '在线终端'], nav: '/shell', perm: 'shell.use' } },

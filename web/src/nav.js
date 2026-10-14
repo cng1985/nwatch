@@ -5,6 +5,8 @@ export const navGroups = [
       { to: '/', label: '系统总览', icon: 'home', perm: 'dashboard.read' },
       { to: '/resources', label: '主机资源', icon: 'cpu', perm: 'host.read' },
       { to: '/services', label: '系统服务', icon: 'service', perm: 'service.read' },
+      { to: '/docker', label: 'Docker', icon: 'docker', perm: 'docker.read' },
+      { to: '/kubernetes', label: 'Kubernetes', icon: 'kube', perm: 'kube.read' },
       { to: '/monitors', label: '监控列表', icon: 'list', perm: 'monitor.read' },
       { to: '/scripts', label: '脚本执行', icon: 'script', perm: 'script.read' },
       { to: '/cron', label: '定时任务', icon: 'clock', perm: 'cron.read' },

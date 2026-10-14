@@ -15,7 +15,9 @@ import (
 	"github.com/cng1985/nwatch/internal/auth"
 	"github.com/cng1985/nwatch/internal/config"
 	"github.com/cng1985/nwatch/internal/cronjob"
+	"github.com/cng1985/nwatch/internal/dockerctl"
 	"github.com/cng1985/nwatch/internal/host"
+	"github.com/cng1985/nwatch/internal/k8sctl"
 	"github.com/cng1985/nwatch/internal/logview"
 	"github.com/cng1985/nwatch/internal/mailer"
 	"github.com/cng1985/nwatch/internal/rbac"
@@ -45,6 +47,8 @@ type Server struct {
 	cron      *cronjob.Service
 	shellHub  *shell.Hub
 	services  *svcctl.Manager
+	docker    *dockerctl.Manager
+	kube      *k8sctl.Manager
 	engine    *gin.Engine
 	http      *http.Server
 	started   time.Time
@@ -77,7 +81,13 @@ func NewServer(
 			MaxSessions: cfg.Shell.MaxSessions,
 		}),
 		services: svcctl.New(cfg.Service.Enabled),
-		engine:   gin.New(), started: time.Now(),
+		docker:   dockerctl.New(cfg.Docker.Enabled),
+		kube: k8sctl.New(k8sctl.Options{
+			Enabled:    cfg.Kubernetes.Enabled,
+			Context:    cfg.Kubernetes.Context,
+			Kubeconfig: cfg.Kubernetes.Kubeconfig,
+		}),
+		engine: gin.New(), started: time.Now(),
 	}
 	s.shellHub.SetRecorder(s.recordShellCommand)
 	s.engine.Use(gin.Recovery())
@@ -182,6 +192,18 @@ func (s *Server) routes() {
 	authed.POST("/services/:name/stop", s.permit(rbac.PermServiceWrite), s.stopService)
 	authed.POST("/services/:name/restart", s.permit(rbac.PermServiceWrite), s.restartService)
 	authed.GET("/services/:name/logs", s.permit(rbac.PermServiceRead), s.serviceLogs)
+	authed.GET("/docker/containers", s.permit(rbac.PermDockerRead), s.listDockerContainers)
+	authed.GET("/docker/images", s.permit(rbac.PermDockerRead), s.listDockerImages)
+	authed.POST("/docker/containers/:name/start", s.permit(rbac.PermDockerWrite), s.startDockerContainer)
+	authed.POST("/docker/containers/:name/stop", s.permit(rbac.PermDockerWrite), s.stopDockerContainer)
+	authed.POST("/docker/containers/:name/restart", s.permit(rbac.PermDockerWrite), s.restartDockerContainer)
+	authed.GET("/docker/containers/:name/logs", s.permit(rbac.PermDockerRead), s.dockerContainerLogs)
+	authed.GET("/kubernetes/namespaces", s.permit(rbac.PermKubeRead), s.listKubeNamespaces)
+	authed.GET("/kubernetes/resources", s.permit(rbac.PermKubeRead), s.listKubeResources)
+	authed.GET("/kubernetes/pods/:namespace/:name/logs", s.permit(rbac.PermKubeRead), s.kubePodLogs)
+	authed.POST("/kubernetes/pods/:namespace/:name/delete", s.permit(rbac.PermKubeWrite), s.deleteKubePod)
+	authed.POST("/kubernetes/workloads/:kind/:namespace/:name/restart", s.permit(rbac.PermKubeWrite), s.restartKubeWorkload)
+	authed.POST("/kubernetes/workloads/:kind/:namespace/:name/scale", s.permit(rbac.PermKubeWrite), s.scaleKubeWorkload)
 	authed.GET("/shell", s.permit(rbac.PermShellUse), s.shellInfo)
 	authed.GET("/shell/commands", s.shellCommands)
 	authed.POST("/shell/ticket", s.permit(rbac.PermShellUse), s.shellTicket)
