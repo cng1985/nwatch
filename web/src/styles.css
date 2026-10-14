@@ -182,6 +182,7 @@ h1, h2, h3, p { margin: 0; }
 .content { padding: 6px 28px 36px; }
 .page-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
 .page-head h1 { font-size: 28px; letter-spacing: -0.03em; }
+.page-head h2 { font-size: 20px; letter-spacing: -0.02em; }
 .page-head p { color: var(--muted); margin-top: 6px; }
 .head-actions { display: flex; gap: 10px; align-items: center; }
 
@@ -329,6 +330,11 @@ textarea.text { height: auto; padding: 10px 12px; }
 .link.danger, .danger { color: var(--red); }
 .modal-mask { position: fixed; inset: 0; background: rgba(15, 28, 36, 0.35); display: grid; place-items: center; z-index: 20; }
 .modal { width: min(480px, calc(100% - 32px)); background: white; border-radius: 16px; padding: 18px; }
+.modal.wide { width: min(760px, calc(100% - 32px)); max-height: min(760px, calc(100vh - 48px)); overflow: auto; }
+.perm-group h4 { font-size: 13px; color: #60707b; margin-bottom: 8px; }
+.perm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.role-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill { background: #f3fbf7; color: #0f9f6e; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 650; }
 .modal h3 { margin-bottom: 12px; }
 .drawer-mask { position: fixed; inset: 0; background: rgba(15, 28, 36, 0.35); z-index: 30; display: flex; justify-content: flex-end; }
 .drawer {

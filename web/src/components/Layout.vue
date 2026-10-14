@@ -17,7 +17,7 @@
         <div class="ver">v1.0.0</div>
         <div class="user-row">
           <div class="avatar"><Icon name="user" /></div>
-          <div><b>管理员</b><small>{{ username }}</small></div>
+          <div><b>{{ displayName }}</b><small>{{ roleText }}</small></div>
           <button title="退出" @click="logout"><Icon name="logout" /></button>
         </div>
       </div>
@@ -32,7 +32,7 @@
         </div>
         <div class="top-tools">
           <span>{{ todayLabel() }}</span>
-          <router-link to="/events" class="bell"><Icon name="bell" /><i v-if="alerts">{{ alerts }}</i></router-link>
+          <router-link v-if="can('event.read')" to="/events" class="bell"><Icon name="bell" /><i v-if="alerts">{{ alerts }}</i></router-link>
         </div>
       </header>
       <div class="content"><router-view /></div>
@@ -47,43 +47,28 @@ import Icon from './Icon.vue'
 import { api } from '../api'
 import { isDemo, todayLabel } from '../format'
 import { demoDashboard } from '../demo'
+import { navGroups } from '../nav'
+import { can, clearSession, loadSession, session } from '../session'
 
 const route = useRoute()
 const router = useRouter()
-const username = ref(localStorage.getItem('nmonitor_user') || 'admin')
 const alerts = ref(isDemo() ? demoDashboard.openAlerts : 0)
 const healthy = ref(true)
 const crumbs = computed(() => route.meta.crumbs || ['工作空间'])
-const groups = [
-  { label: '工作空间', items: [
-    { to: '/', label: '系统总览', icon: 'home' },
-    { to: '/resources', label: '主机资源', icon: 'cpu' },
-    { to: '/services', label: '系统服务', icon: 'service' },
-    { to: '/monitors', label: '监控列表', icon: 'list' },
-    { to: '/scripts', label: '脚本执行', icon: 'script' },
-    { to: '/cron', label: '定时任务', icon: 'clock' },
-    { to: '/shell', label: '在线终端', icon: 'terminal' },
-    { to: '/certificates', label: 'HTTPS 证书', icon: 'cert' },
-  ] },
-  { label: '告警与通知', items: [
-    { to: '/events', label: '告警事件', icon: 'bell', badge: true },
-    { to: '/notifiers', label: '通知渠道', icon: 'chat' },
-    { to: '/notification-logs', label: '通知日志', icon: 'ticket' },
-  ] },
-  { label: '管理', items: [
-    { to: '/groups', label: '监控分组', icon: 'folder' },
-    { to: '/logs', label: '运行日志', icon: 'file' },
-    { to: '/settings', label: '系统配置', icon: 'settings' },
-  ] },
-]
+const groups = computed(() => navGroups
+  .map((group) => ({ ...group, items: group.items.filter((item) => can(item.perm)) }))
+  .filter((group) => group.items.length))
+const displayName = computed(() => (isDemo() ? '管理员' : session.displayName || session.username || '用户'))
+const roleText = computed(() => (isDemo() ? '管理员' : session.roles.map((item) => item.name).join('、')))
 
 onMounted(async () => {
   if (isDemo()) return
   try {
-    const me = await api('/api/auth/me')
-    username.value = me.username
-    const dash = await api('/api/dashboard')
-    alerts.value = dash.openAlerts || 0
+    if (!session.loaded) await loadSession()
+    if (can('dashboard.read')) {
+      const dash = await api('/api/dashboard')
+      alerts.value = dash.openAlerts || 0
+    }
     const health = await fetch('/health').then((res) => res.json())
     healthy.value = health.status === 'UP'
   } catch { /* 忽略侧栏刷新失败 */ }
@@ -92,6 +77,7 @@ onMounted(async () => {
 function logout() {
   localStorage.removeItem('nmonitor_token')
   localStorage.removeItem('nmonitor_demo')
+  clearSession()
   router.push('/login')
 }
 </script>

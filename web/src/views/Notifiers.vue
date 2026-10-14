@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <div><h1>通知渠道</h1><p>已启用的渠道都会收到告警。服务异常后按 15 秒、45 秒、之后每分钟通知，直到恢复。关闭的渠道不发送。</p></div>
-      <button class="btn primary" @click="open()">新增渠道</button>
+      <button v-if="can('notifier.write')" class="btn primary" @click="open()">新增渠道</button>
     </div>
     <div class="card table-wrap">
       <table>
@@ -13,7 +13,7 @@
             <td>{{ { dingtalk: '钉钉', wecom: '企业微信', webhook: 'Webhook' }[row.type] }}</td>
             <td>{{ row.webhookUrl || '演示渠道' }}</td>
             <td>{{ row.secretSet ? '已配置' : '-' }}</td>
-            <td class="actions-inline"><button @click="test(row)">测试</button><button @click="open(row)">编辑</button><button class="danger" @click="remove(row)">删除</button></td>
+            <td class="actions-inline"><template v-if="can('notifier.write')"><button @click="test(row)">测试</button><button @click="open(row)">编辑</button><button class="danger" @click="remove(row)">删除</button></template></td>
           </tr>
           <tr v-if="!items.length"><td colspan="5" class="empty">还没有通知渠道</td></tr>
         </tbody>
@@ -35,6 +35,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { api } from '../api'
+import { can } from '../session'
 import { demoNotifiers } from '../demo'
 import { isDemo } from '../format'
 const items = ref([])

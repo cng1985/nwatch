@@ -6,11 +6,11 @@
         <p>所有服务状态，一目了然。</p>
       </div>
       <div class="head-actions">
-        <select v-model="groupId" class="select">
+        <select v-if="can('group.read')" v-model="groupId" class="select">
           <option value="">全部分组</option>
           <option v-for="g in groups" :key="g.id" :value="String(g.id)">{{ g.name }}</option>
         </select>
-        <router-link class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
+        <router-link v-if="can('monitor.write')" class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
       </div>
     </div>
 
@@ -113,6 +113,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
+import { can } from '../session'
 import { demoGroups, demoTrend, presentDemo } from '../demo'
 import { bytes, iconOf, isDemo, joinNames, relative, statusLabel, targetOf } from '../format'
 
@@ -165,7 +166,7 @@ async function load() {
   }
   const dash = await api('/api/dashboard?range=' + range.value)
   Object.assign(data, dash)
-  groups.value = await api('/api/groups')
+  try { groups.value = can('group.read') ? await api('/api/groups') : [] } catch { groups.value = [] }
   try {
     const resources = await api('/api/host?range=1h')
     applyHost(resources.current || {})

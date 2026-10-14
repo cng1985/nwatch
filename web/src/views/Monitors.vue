@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <div><h1>监控列表</h1><p>按状态查看全部监控，异常会排在最上方。</p></div>
-      <router-link class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
+      <router-link v-if="can('monitor.write')" class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
     </div>
     <div class="toolbar">
       <input v-model="query.keyword" class="search" placeholder="搜索名称或地址" @keyup.enter="load" />
@@ -26,9 +26,11 @@
             <td><span class="bar" :class="{ bad: row.status === 'DOWN' }"><i :style="{ width: (row.hasAvailability ? row.availability24h : 0) + '%' }"></i></span><span class="pct">{{ availabilityText(row) }}</span></td>
             <td>{{ relative(row.lastCheckAt) }}</td>
             <td class="actions-inline">
-              <button @click="check(row)">检测</button>
-              <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
-              <button class="danger" @click="remove(row)">删除</button>
+              <template v-if="can('monitor.write')">
+                <button @click="check(row)">检测</button>
+                <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
+                <button class="danger" @click="remove(row)">删除</button>
+              </template>
             </td>
           </tr>
           <tr v-if="!items.length"><td colspan="6" class="empty">还没有监控</td></tr>
@@ -64,9 +66,11 @@
           <div class="monitor-card-foot">
             <span class="monitor-type">{{ typeText[row.type] || row.type || '监控' }}<template v-if="row.group?.name"> · {{ row.group.name }}</template></span>
             <div class="actions-inline">
-              <button @click="check(row)">检测</button>
-              <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
-              <button class="danger" @click="remove(row)">删除</button>
+              <template v-if="can('monitor.write')">
+                <button @click="check(row)">检测</button>
+                <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
+                <button class="danger" @click="remove(row)">删除</button>
+              </template>
             </div>
           </div>
         </article>
@@ -85,6 +89,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
+import { can } from '../session'
 import { presentDemo } from '../demo'
 import { iconOf, isDemo, relative, statusLabel, targetOf, typeText } from '../format'
 

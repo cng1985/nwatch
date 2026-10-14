@@ -36,9 +36,9 @@
             <td>{{ bootLabel(row.unitFile) }}</td>
             <td>
               <div class="actions-inline">
-                <button v-if="!running(row)" :disabled="!!busy" @click="act(row, 'start')">{{ busy === row.name + ':start' ? '处理中' : '启动' }}</button>
-                <button v-else class="danger" :disabled="!!busy" @click="act(row, 'stop')">{{ busy === row.name + ':stop' ? '处理中' : '停止' }}</button>
-                <button :disabled="!!busy" @click="act(row, 'restart')">重启</button>
+                <button v-if="can('service.write') && !running(row)" :disabled="!!busy" @click="act(row, 'start')">{{ busy === row.name + ':start' ? '处理中' : '启动' }}</button>
+                <button v-else-if="can('service.write')" class="danger" :disabled="!!busy" @click="act(row, 'stop')">{{ busy === row.name + ':stop' ? '处理中' : '停止' }}</button>
+                <button v-if="can('service.write')" :disabled="!!busy" @click="act(row, 'restart')">重启</button>
                 <button :disabled="!!busy" @click="openLogs(row)">日志</button>
               </div>
             </td>
@@ -73,6 +73,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
+import { can } from '../session'
 import { isDemo } from '../format'
 
 const items = ref([])

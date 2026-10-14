@@ -61,6 +61,8 @@ func Migrate(db *gorm.DB) error {
 		&model.AppLog{},
 		&model.CronJob{},
 		&model.CronRun{},
+		&model.Role{},
+		&model.User{},
 	); err != nil {
 		return err
 	}

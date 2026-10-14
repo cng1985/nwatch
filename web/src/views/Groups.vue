@@ -1,11 +1,11 @@
 <template>
   <div>
-    <div class="page-head"><div><h1>监控分组</h1><p>按环境或系统把监控归类。</p></div><button class="btn primary" @click="open()">新增分组</button></div>
+    <div class="page-head"><div><h1>监控分组</h1><p>按环境或系统把监控归类。</p></div><button v-if="can('group.write')" class="btn primary" @click="open()">新增分组</button></div>
     <div class="card table-wrap">
       <table>
         <thead><tr><th>名称</th><th>说明</th><th>排序</th><th>监控数</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="row in items" :key="row.id"><td><b>{{ row.name }}</b></td><td>{{ row.description }}</td><td>{{ row.sort }}</td><td>{{ row.monitorCount ?? '-' }}</td><td class="actions-inline"><button @click="open(row)">编辑</button><button class="danger" @click="remove(row)">删除</button></td></tr>
+          <tr v-for="row in items" :key="row.id"><td><b>{{ row.name }}</b></td><td>{{ row.description }}</td><td>{{ row.sort }}</td><td>{{ row.monitorCount ?? '-' }}</td><td class="actions-inline"><template v-if="can('group.write')"><button @click="open(row)">编辑</button><button class="danger" @click="remove(row)">删除</button></template></td></tr>
           <tr v-if="!items.length"><td colspan="5" class="empty">还没有分组</td></tr>
         </tbody>
       </table>
@@ -25,6 +25,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { api } from '../api'
+import { can } from '../session'
 import { demoGroups } from '../demo'
 import { isDemo } from '../format'
 const items = ref([])

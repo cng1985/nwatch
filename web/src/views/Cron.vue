@@ -7,11 +7,11 @@
       </div>
       <div class="head-actions">
         <button class="btn ghost" @click="openAllRuns">执行记录</button>
-        <button class="btn primary" @click="startCreate"><Icon name="plus" style="width:16px;height:16px" /> 新建任务</button>
+        <button v-if="can('cron.write')" class="btn primary" @click="startCreate"><Icon name="plus" style="width:16px;height:16px" /> 新建任务</button>
       </div>
     </div>
 
-    <div v-if="formOpen" class="editor">
+    <div v-if="formOpen && can('cron.write')" class="editor">
       <section class="card section">
         <h3><em>01</em> {{ form.id ? '编辑任务' : '新建任务' }}</h3>
         <div class="form-grid">
@@ -72,10 +72,12 @@
             <td>{{ row.enabled ? zoneClock(row.nextRunAt) : '-' }}</td>
             <td>{{ relative(row.lastRunAt) }}</td>
             <td class="actions-inline" @click.stop>
-              <button :disabled="runningId === row.id" @click="run(row)">{{ runningId === row.id ? '执行中' : '执行' }}</button>
-              <button @click="edit(row)">编辑</button>
-              <button @click="toggle(row)">{{ row.enabled ? '停用' : '启用' }}</button>
-              <button class="danger" @click="remove(row)">删除</button>
+              <template v-if="can('cron.write')">
+                <button :disabled="runningId === row.id" @click="run(row)">{{ runningId === row.id ? '执行中' : '执行' }}</button>
+                <button @click="edit(row)">编辑</button>
+                <button @click="toggle(row)">{{ row.enabled ? '停用' : '启用' }}</button>
+                <button class="danger" @click="remove(row)">删除</button>
+              </template>
             </td>
           </tr>
           <tr v-if="!items.length"><td colspan="6" class="empty">还没有定时任务</td></tr>
@@ -152,6 +154,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import CronExpr from '../components/CronExpr.vue'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
+import { can } from '../session'
 import { clock, isDemo, relative } from '../format'
 
 const timeouts = [[10, '10 秒'], [30, '30 秒'], [60, '1 分钟'], [120, '2 分钟'], [300, '5 分钟'], [600, '10 分钟'], [1800, '30 分钟'], [3600, '1 小时']]

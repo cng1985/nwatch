@@ -10,15 +10,16 @@ import (
 	"time"
 
 	"github.com/cng1985/nwatch/internal/config"
+	"github.com/cng1985/nwatch/internal/rbac"
 	"github.com/cng1985/nwatch/internal/settings"
 	"github.com/golang-jwt/jwt/v5"
+	"gorm.io/gorm"
 )
 
 type Service struct {
-	username string
-	secret   []byte
-	ttl      time.Duration
-	settings *settings.Store
+	secret []byte
+	ttl    time.Duration
+	users  *rbac.Store
 
 	mu       sync.Mutex
 	attempts map[string][]time.Time
@@ -26,12 +27,17 @@ type Service struct {
 
 type Claims struct {
 	Username string `json:"username"`
+	UserID   uint   `json:"uid"`
 	jwt.RegisteredClaims
 }
 
-func New(cfg *config.Config, store *settings.Store) (*Service, error) {
+func New(cfg *config.Config, db *gorm.DB, store *settings.Store) (*Service, error) {
 	secret, err := loadSecret(cfg)
 	if err != nil {
+		return nil, err
+	}
+	users := rbac.New(db)
+	if err := users.Ensure(cfg, store); err != nil {
 		return nil, err
 	}
 	ttl := cfg.Security.JWTTTL
@@ -39,13 +45,15 @@ func New(cfg *config.Config, store *settings.Store) (*Service, error) {
 		ttl = 24 * time.Hour
 	}
 	return &Service{
-		username: cfg.Security.Username,
 		secret:   secret,
 		ttl:      ttl,
-		settings: store,
+		users:    users,
 		attempts: map[string][]time.Time{},
 	}, nil
 }
+
+// Users 返回用户和角色存储。
+func (s *Service) Users() *rbac.Store { return s.users }
 
 func loadSecret(cfg *config.Config) ([]byte, error) {
 	if cfg.Security.JWTSecret != "" {
@@ -70,24 +78,40 @@ func loadSecret(cfg *config.Config) ([]byte, error) {
 }
 
 var ErrRateLimited = errors.New("尝试过于频繁，请稍后再试")
-var ErrBadCredentials = errors.New("用户名或密码错误")
 
-func (s *Service) Login(ip, username, password string) (string, error) {
+func (s *Service) Login(ip, username, password string) (string, *rbac.Principal, error) {
 	if !s.allow(ip) {
-		return "", ErrRateLimited
+		return "", nil, ErrRateLimited
 	}
-	if username != s.username || !s.settings.CheckPassword(password) {
-		return "", ErrBadCredentials
+	principal, err := s.users.Authenticate(username, password)
+	if err != nil {
+		return "", nil, err
 	}
-	return s.sign(username)
+	token, err := s.sign(principal)
+	if err != nil {
+		return "", nil, err
+	}
+	return token, principal, nil
 }
 
-func (s *Service) sign(username string) (string, error) {
+// Principal 根据令牌加载当前用户。用户被停用或删除后，原来的令牌不能继续使用。
+func (s *Service) Principal(claims *Claims) (*rbac.Principal, error) {
+	if claims == nil {
+		return nil, errors.New("无效令牌")
+	}
+	if claims.UserID > 0 {
+		return s.users.PrincipalByID(claims.UserID)
+	}
+	return s.users.PrincipalByUsername(claims.Username)
+}
+
+func (s *Service) sign(principal *rbac.Principal) (string, error) {
 	now := time.Now()
 	claims := Claims{
-		Username: username,
+		Username: principal.Username,
+		UserID:   principal.ID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
+			Subject:   principal.Username,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
 		},
