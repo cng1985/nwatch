@@ -56,7 +56,7 @@ func newTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tokens, err := auth.New(cfg, store)
+	tokens, err := auth.New(cfg, db, store)
 	if err != nil {
 		t.Fatal(err)
 	}

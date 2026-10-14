@@ -14,7 +14,8 @@
           <label class="field"><span>小时统计保留（天）</span><input v-model.number="form.hourMetricRetentionDays" class="text" type="number" /></label>
           <p class="demo-note">工作线程 {{ form.workerCount || 20 }} · 版本 {{ form.version || '1.0.0' }} · {{ form.database }}</p>
           <p v-if="error" class="error">{{ error }}</p>
-          <button class="btn primary" style="width:120px">保存配置</button>
+          <button v-if="writable" class="btn primary" style="width:120px">保存配置</button>
+          <p v-else class="demo-note">当前角色只能查看运行参数。</p>
         </div>
       </form>
       <div>
@@ -28,12 +29,13 @@
         </form>
         <div class="card section">
           <h3>备份与迁移</h3>
-          <div class="head-actions">
+          <div v-if="writable" class="head-actions">
             <button class="btn ghost" type="button" @click="backup">下载数据库备份</button>
             <button class="btn ghost" type="button" @click="exportConfig(false)">导出配置</button>
             <button class="btn ghost" type="button" @click="fileRef.click()">导入配置</button>
             <input ref="fileRef" hidden type="file" accept="application/json" @change="importConfig" />
           </div>
+          <p v-else class="demo-note">当前角色不能备份或导入配置。</p>
         </div>
       </div>
     </div>
@@ -58,7 +60,7 @@
       </div>
       <p v-if="mailError" class="error">{{ mailError }}</p>
       <p v-if="mailMessage" class="demo-note" style="color:#12915f">{{ mailMessage }}</p>
-      <div class="head-actions" style="padding-bottom:12px">
+      <div v-if="writable" class="head-actions" style="padding-bottom:12px">
         <button class="btn primary" type="submit">保存邮件配置</button>
         <button class="btn ghost" type="button" @click="testMail">发送测试邮件</button>
       </div>
@@ -66,9 +68,10 @@
   </div>
 </template>
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { api, download } from '../api'
 import { isDemo } from '../format'
+import { can } from '../session'
 const form = reactive({ timezone: 'Asia/Shanghai', defaultInterval: 60, defaultTimeout: 5, checkRetentionDays: 7, eventRetentionDays: 365, metricRetentionDays: 90, hourMetricRetentionDays: 730, workerCount: 20, version: '1.0.0' })
 const mail = reactive({ enabled: false, host: '', port: 587, username: '', password: '', passwordSet: false, from: '', to: '', encryption: 'starttls' })
 const password = reactive({ oldPassword: '', newPassword: '' })
@@ -76,6 +79,7 @@ const error = ref('')
 const mailError = ref('')
 const mailMessage = ref('')
 const fileRef = ref()
+const writable = computed(() => can('settings.write'))
 function applyMail(src, keepPassword = false) {
   if (!src) return
   const typed = mail.password
@@ -89,6 +93,7 @@ async function load() {
   applyMail(data.mail)
 }
 async function save() {
+  if (!writable.value) return
   if (isDemo()) { error.value = '演示模式不会写入服务器'; return }
   try {
     const data = await api('/api/settings', { method: 'PUT', body: form })
@@ -98,6 +103,7 @@ async function save() {
   } catch (err) { error.value = err.message }
 }
 async function saveMail() {
+  if (!writable.value) return
   if (isDemo()) { mailError.value = '演示模式不会写入服务器'; return }
   try {
     const data = await api('/api/settings/mail', { method: 'PUT', body: mail })
@@ -108,6 +114,7 @@ async function saveMail() {
   } catch (err) { mailMessage.value = ''; mailError.value = err.message }
 }
 async function testMail() {
+  if (!writable.value) return
   if (isDemo()) { mailError.value = '演示模式不会连接邮件服务器'; return }
   try {
     await api('/api/settings/mail/test', { method: 'POST', body: mail })
@@ -119,9 +126,9 @@ async function changePassword() {
   if (isDemo()) return
   try { await api('/api/account/password', { method: 'PUT', body: password }); password.oldPassword = ''; password.newPassword = '' } catch (err) { error.value = err.message }
 }
-async function backup() { if (!isDemo()) await download('/api/backup', 'nmonitor-backup.db') }
+async function backup() { if (writable.value && !isDemo()) await download('/api/backup', 'nmonitor-backup.db') }
 async function exportConfig(includeSecrets) {
-  if (isDemo()) return
+  if (!writable.value || isDemo()) return
   const data = await api('/api/export?includeSecrets=' + includeSecrets)
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const link = document.createElement('a')
@@ -132,7 +139,7 @@ async function exportConfig(includeSecrets) {
 async function importConfig(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
-  if (!file || isDemo()) return
+  if (!file || !writable.value || isDemo()) return
   await api('/api/import', { method: 'POST', body: JSON.parse(await file.text()) })
 }
 onMounted(load)

@@ -7,9 +7,9 @@
       </div>
       <div class="head-actions">
         <span class="status" :class="monitor.status"><i class="mark" :class="monitor.status === 'DOWN' ? 'red' : 'green'"></i>{{ statusLabel(monitor.status) }}</span>
-        <button class="btn ghost" @click="checkNow">立即检测</button>
-        <button class="btn ghost" @click="toggle">{{ monitor.enabled ? '暂停' : '启用' }}</button>
-        <router-link class="btn primary" :to="'/monitors/' + monitor.id + '/edit'">编辑</router-link>
+        <button v-if="can('monitor.write')" class="btn ghost" @click="checkNow">立即检测</button>
+        <button v-if="can('monitor.write')" class="btn ghost" @click="toggle">{{ monitor.enabled ? '暂停' : '启用' }}</button>
+        <router-link v-if="can('monitor.write')" class="btn primary" :to="'/monitors/' + monitor.id + '/edit'">编辑</router-link>
       </div>
     </div>
     <p v-if="message" class="demo-note" style="margin-bottom:12px">{{ message }}</p>
@@ -48,6 +48,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import Charts from '../components/Charts.vue'
 import { api } from '../api'
+import { can } from '../session'
 import { clock, eventText, isDemo, percent, relative, statusLabel, targetOf } from '../format'
 import { demoEvents, presentDemo } from '../demo'
 

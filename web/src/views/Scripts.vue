@@ -10,18 +10,19 @@
       <section class="card section">
         <h3><em>01</em> 执行</h3>
         <div class="form-grid">
-          <label class="field"><span>名称</span><input v-model="form.name" class="text" placeholder="手动检查" /></label>
+          <label class="field"><span>名称</span><input v-model="form.name" class="text" placeholder="手动检查" :disabled="!can('script.write')" /></label>
           <label class="field"><span>超时</span>
-            <select v-model.number="form.timeout" class="select" style="width:100%">
+            <select v-model.number="form.timeout" class="select" style="width:100%" :disabled="!can('script.write')">
               <option :value="5">5 秒</option><option :value="10">10 秒</option><option :value="30">30 秒</option><option :value="60">60 秒</option><option :value="120">120 秒</option>
             </select>
           </label>
-          <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="df -h /"></textarea></label>
-          <label class="field full"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/tmp" /></label>
+          <label class="field full"><span class="req">脚本内容</span><textarea v-model="form.command" class="text" rows="6" placeholder="df -h /" :disabled="!can('script.write')"></textarea></label>
+          <label class="field full"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/tmp" :disabled="!can('script.write')" /></label>
         </div>
         <p v-if="error" class="error">{{ error }}</p>
         <div class="head-actions" style="margin:4px 0 16px">
-          <button class="btn primary" :disabled="running" @click="run">{{ running ? '执行中' : '立即执行' }}</button>
+          <button v-if="can('script.write')" class="btn primary" :disabled="running" @click="run">{{ running ? '执行中' : '立即执行' }}</button>
+          <p v-else class="demo-note">当前角色只能查看执行记录。</p>
         </div>
       </section>
       <aside class="card preview">
@@ -62,6 +63,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { api } from '../api'
+import { can } from '../session'
 import { clock, isDemo } from '../format'
 
 const form = reactive({ name: '', command: '', workDir: '', timeout: 10 })

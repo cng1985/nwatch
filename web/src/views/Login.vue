@@ -57,6 +57,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
 import { api } from '../api'
+import { applySession } from '../session'
 
 const router = useRouter()
 const username = ref(localStorage.getItem('nmonitor_remember_user') || '')
@@ -80,6 +81,7 @@ async function submit() {
     localStorage.setItem('nmonitor_token', data.token)
     localStorage.setItem('nmonitor_user', data.username)
     localStorage.setItem('nmonitor_default_pw', data.usingDefaultPassword ? '1' : '0')
+    applySession(data)
     if (remember.value) localStorage.setItem('nmonitor_remember_user', username.value)
     else localStorage.removeItem('nmonitor_remember_user')
     router.push('/')
