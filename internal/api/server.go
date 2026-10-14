@@ -89,6 +89,7 @@ func NewServer(
 		}),
 		engine: gin.New(), started: time.Now(),
 	}
+	s.shellHub.SetRecorder(s.recordShellCommand)
 	s.engine.Use(gin.Recovery())
 	s.routes()
 	s.http = &http.Server{
@@ -204,6 +205,7 @@ func (s *Server) routes() {
 	authed.POST("/kubernetes/workloads/:kind/:namespace/:name/restart", s.permit(rbac.PermKubeWrite), s.restartKubeWorkload)
 	authed.POST("/kubernetes/workloads/:kind/:namespace/:name/scale", s.permit(rbac.PermKubeWrite), s.scaleKubeWorkload)
 	authed.GET("/shell", s.permit(rbac.PermShellUse), s.shellInfo)
+	authed.GET("/shell/commands", s.shellCommands)
 	authed.POST("/shell/ticket", s.permit(rbac.PermShellUse), s.shellTicket)
 	s.engine.GET("/api/shell/ws", s.shellConnect)
 	s.engine.NoRoute(s.frontend)

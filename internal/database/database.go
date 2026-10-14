@@ -59,6 +59,7 @@ func Migrate(db *gorm.DB) error {
 		&model.HostSample{},
 		&model.ScriptRun{},
 		&model.AppLog{},
+		&model.ShellCommand{},
 		&model.CronJob{},
 		&model.CronRun{},
 		&model.Role{},

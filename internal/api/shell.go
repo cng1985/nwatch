@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cng1985/nwatch/internal/model"
+	"github.com/cng1985/nwatch/internal/rbac"
 	"github.com/cng1985/nwatch/internal/shell"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -23,6 +25,48 @@ var shellUpgrader = websocket.Upgrader{
 
 func (s *Server) shellInfo(c *gin.Context) {
 	ok(c, s.shellHub.Info())
+}
+
+func (s *Server) recordShellCommand(username, remote, sessionID, command string) {
+	row := model.ShellCommand{
+		Username:  username,
+		Remote:    remote,
+		SessionID: sessionID,
+		Command:   command,
+		CreatedAt: time.Now(),
+	}
+	if err := s.db.Create(&row).Error; err != nil {
+		slog.Error("记录终端命令失败", "err", err.Error(), "user", username, "session", sessionID)
+		return
+	}
+	slog.Info("在线终端执行命令: "+command, "user", username, "remote", remote, "session", sessionID)
+}
+
+func (s *Server) shellCommands(c *gin.Context) {
+	principal := principalOf(c)
+	if principal == nil || (!principal.Can(rbac.PermShellUse) && !principal.Can(rbac.PermLogRead)) {
+		fail(c, http.StatusForbidden, "没有权限")
+		return
+	}
+	page, size := pageParams(c)
+	q := s.db.Model(&model.ShellCommand{})
+	if userName := strings.TrimSpace(c.Query("username")); userName != "" {
+		q = q.Where("username = ?", userName)
+	}
+	if kw := strings.TrimSpace(c.Query("keyword")); kw != "" {
+		q = q.Where("command LIKE ?", "%"+kw+"%")
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	var items []model.ShellCommand
+	if err := q.Order("created_at desc, id desc").Offset((page - 1) * size).Limit(size).Find(&items).Error; err != nil {
+		fail(c, http.StatusInternalServerError, "查询失败")
+		return
+	}
+	ok(c, gin.H{"items": items, "total": total})
 }
 
 func (s *Server) shellTicket(c *gin.Context) {

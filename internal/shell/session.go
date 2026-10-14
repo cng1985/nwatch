@@ -30,6 +30,8 @@ type Session struct {
 	cmd       *exec.Cmd
 	hub       *Hub
 	started   time.Time
+	edit      lineEdit
+	screen    screenLine
 
 	mu        sync.Mutex
 	lastInput time.Time
@@ -74,7 +76,11 @@ func (s *Session) Read(p []byte) (int, error) {
 	if term == nil {
 		return 0, io.EOF
 	}
-	return term.Read(p)
+	n, err := term.Read(p)
+	if n > 0 {
+		s.screen.Write(p[:n])
+	}
+	return n, err
 }
 
 func (s *Session) Write(p []byte) (int, error) {
@@ -90,7 +96,41 @@ func (s *Session) Write(p []byte) (int, error) {
 	if term == nil {
 		return 0, io.EOF
 	}
-	return term.Write(p)
+	items := s.edit.Feed(p)
+	n, err := term.Write(p)
+	if err == nil {
+		s.auditInput(items)
+	}
+	return n, err
+}
+
+func (s *Session) auditInput(items []submission) {
+	if len(items) == 0 || s.hub == nil {
+		return
+	}
+	s.mu.Lock()
+	userName, remote, id := s.user, s.remote, s.id
+	hub := s.hub
+	s.mu.Unlock()
+	if suppressForPassword(s.screen.Text()) {
+		return
+	}
+	for _, item := range items {
+		if item.text == "" && !item.fromScreen {
+			continue
+		}
+		cmd := item.text
+		if item.fromScreen {
+			if visible := commandFromScreen(s.screen.Text()); visible != "" {
+				cmd = visible
+			}
+		}
+		cmd = sanitizeCommand(cmd)
+		if cmd == "" {
+			continue
+		}
+		hub.emit(userName, remote, id, cmd)
+	}
 }
 
 func (s *Session) SetReadDeadline(t time.Time) error {
