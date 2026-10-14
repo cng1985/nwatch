@@ -33,6 +33,48 @@ config.yaml
 - 管理员登录，默认密码可通过环境变量覆盖
 - 配置导入导出，SQLite 备份
 
+## 代码结构
+
+后端按功能分包。`cmd/server` 只启动进程，`internal/app` 用 fx 把各包自己的 Module 组装起来。前端是 Vue 3 管理台，`npm run build` 写到 `internal/web/dist`，再由 `internal/web` 嵌入二进制。
+
+```text
+cmd/server/main.go        进程入口
+internal/app/             组装各功能模块并启动
+internal/config/          读取 config.yaml 和环境变量
+internal/database/        打开并关闭 SQLite
+internal/model/           监控、告警、通知等数据模型
+internal/settings/        运行时可改的系统配置
+internal/checker/         HTTP、证书、TCP、资源和脚本检测
+internal/monitor/         监控请求的校验和规范化
+internal/state/           连续失败或成功后切换状态
+internal/scheduler/       每秒领取到期检测，工作池执行
+internal/metric/          按分钟、小时、天聚合检测结果
+internal/dashboard/       总览和趋势查询
+internal/alert/           异步通知队列，故障期间定时提醒
+internal/notifier/        钉钉、企业微信、Webhook
+internal/mailer/          邮件发送和失败重试
+internal/cronjob/         cron 表达式、脚本和 HTTP 定时任务
+internal/host/            本机 CPU、内存、磁盘和进程采集
+internal/shell/           在线终端会话和一次性连接凭证
+internal/svcctl/          调用 systemctl 和 journalctl
+internal/logview/         写入并查询进程日志
+internal/maintenance/     数据库备份和历史清理
+internal/auth/            登录和 JWT
+internal/api/             HTTP 与 WebSocket 接口
+internal/transfer/        配置导入导出
+internal/web/             嵌入前端构建产物
+internal/version/         版本号
+web/                      Vue 3 管理台
+  src/views/              总览、资源、服务、监控、证书、告警、通知、日志、配置等页面
+  src/components/         布局、图表、cron 表达式
+  src/api.js              接口调用
+  src/router.js           路由和登录拦截
+deploy/                   systemd 单元和安装脚本
+config.yaml               默认配置
+Dockerfile
+Makefile
+```
+
 ## 运行
 
 ```bash
