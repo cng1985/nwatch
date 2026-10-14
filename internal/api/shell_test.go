@@ -78,6 +78,10 @@ func TestShellTicketAndSocket(t *testing.T) {
 	if !strings.Contains(got.String(), "nmonitor-shell-ok") {
 		t.Fatalf("socket output %q", got.String())
 	}
+	waitUntil(t, 2*time.Second, func() bool {
+		rec := do(t, s, http.MethodGet, "/api/shell/commands?keyword=nmonitor-shell-ok", token, nil)
+		return rec.Code == 200 && strings.Contains(rec.Body.String(), "printf nmonitor-shell-ok")
+	})
 	_ = conn.Close()
 	waitUntil(t, time.Second, func() bool { return s.shellHub.Active() == 0 })
 
@@ -89,6 +93,47 @@ func TestShellTicketAndSocket(t *testing.T) {
 	} else if resp != nil && resp.StatusCode != http.StatusUnauthorized {
 		raw, _ := io.ReadAll(resp.Body)
 		t.Fatalf("reuse status %d %s", resp.StatusCode, raw)
+	}
+}
+
+func TestShellMultipleSessions(t *testing.T) {
+	if shell.LookShell() == "" {
+		t.Skip("没有可用的 shell")
+	}
+	s := newTestServer(t)
+	token := login(t, s)
+	srv := httptest.NewServer(s.Handler())
+	defer srv.Close()
+	open := func() *websocket.Conn {
+		t.Helper()
+		ticket := issueShellTicket(t, s, token)
+		wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/shell/ws?ticket=" + ticket + "&cols=80&rows=24"
+		conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err != nil {
+			body := ""
+			if resp != nil {
+				raw, _ := io.ReadAll(resp.Body)
+				body = string(raw)
+			}
+			t.Fatalf("dial: %v %s", err, body)
+		}
+		return conn
+	}
+	first := open()
+	defer first.Close()
+	second := open()
+	defer second.Close()
+	waitUntil(t, time.Second, func() bool { return s.shellHub.Active() == 2 })
+	if err := second.WriteMessage(websocket.BinaryMessage, []byte("pwd\n")); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, 2*time.Second, func() bool {
+		rec := do(t, s, http.MethodGet, "/api/shell/commands?keyword=pwd&username=admin", token, nil)
+		return rec.Code == 200 && strings.Contains(rec.Body.String(), `"command":"pwd"`)
+	})
+	anon := do(t, s, http.MethodGet, "/api/shell/commands", "", nil)
+	if anon.Code != http.StatusUnauthorized {
+		t.Fatalf("anon %d", anon.Code)
 	}
 }
 
