@@ -66,6 +66,7 @@ func (s *Service) RunOnce() {
 	s.purge(&model.MonitorCheck{}, "checked_at", now.AddDate(0, 0, -snap.CheckRetentionDays))
 	s.purge(&model.AlertEvent{}, "occurred_at", now.AddDate(0, 0, -snap.EventRetentionDays))
 	s.purge(&model.NotificationLog{}, "sent_at", now.AddDate(0, 0, -snap.EventRetentionDays))
+	s.purge(&model.ShellCommand{}, "created_at", now.AddDate(0, 0, -30))
 	cronjob.Prune(s.db)
 	if err := s.db.Where("bucket_type = ? AND bucket_time < ?", model.BucketMinute, now.AddDate(0, 0, -snap.MetricRetentionDays)).
 		Delete(&model.MonitorMetric{}).Error; err != nil {

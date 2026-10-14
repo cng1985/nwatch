@@ -11,6 +11,36 @@ import (
 	"time"
 )
 
+func TestAuditAfterPromptCharByChar(t *testing.T) {
+	var got []string
+	h := NewHub(Options{Enabled: true, IdleTimeout: time.Minute, MaxLifetime: time.Hour, MaxSessions: 1})
+	h.SetRecorder(func(_, _, _, command string) { got = append(got, command) })
+	t.Cleanup(h.Close)
+	sess, err := h.Open("admin", "127.0.0.1", 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.CloseWith("client")
+	buf := make([]byte, 4096)
+	deadline := time.Now().Add(2 * time.Second)
+	var out strings.Builder
+	for time.Now().Before(deadline) && !strings.Contains(out.String(), "$") && !strings.Contains(out.String(), "#") && !strings.Contains(out.String(), ">") {
+		_ = sess.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		n, _ := sess.Read(buf)
+		if n > 0 {
+			out.Write(buf[:n])
+		}
+	}
+	for _, b := range []byte("echo hi-there\n") {
+		if _, err := sess.Write([]byte{b}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !strings.Contains(strings.Join(got, "\n"), "echo hi-there") {
+		t.Fatalf("missing command, prompt=%q got=%q", out.String(), got)
+	}
+}
+
 func TestSessionEchoResizeAndClose(t *testing.T) {
 	h := NewHub(Options{Enabled: true, IdleTimeout: time.Minute, MaxLifetime: time.Hour, MaxSessions: 2})
 	t.Cleanup(h.Close)

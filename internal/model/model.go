@@ -358,6 +358,16 @@ type CronRun struct {
 	FinishedAt   time.Time `json:"finishedAt"`
 }
 
+// ShellCommand 是在线终端里提交的一条命令。
+type ShellCommand struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Username  string    `gorm:"size:64;index" json:"username"`
+	SessionID string    `gorm:"size:32;index" json:"sessionId"`
+	Remote    string    `gorm:"size:64" json:"remote"`
+	Command   string    `gorm:"size:4000" json:"command"`
+	CreatedAt time.Time `gorm:"index" json:"createdAt"`
+}
+
 // AppLog 是进程日志，供管理台查看。
 type AppLog struct {
 	ID       uint      `gorm:"primaryKey" json:"id"`

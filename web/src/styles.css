@@ -368,8 +368,25 @@ textarea.text { height: auto; padding: 10px 12px; }
 .term-meta { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .term-meta code { font-size: 13px; color: #3d4d58; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-actions { display: flex; gap: 8px; flex: none; }
+.term-tabs { display: flex; align-items: flex-end; gap: 6px; padding: 10px 12px 0; overflow-x: auto; }
+.term-tab, .term-tab-add {
+  height: 34px; border: 1px solid var(--line); background: #f7fafb; color: #60707b;
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+}
+.term-tab { padding: 0 8px 0 10px; border-radius: 10px 10px 0 0; font-size: 13px; font-weight: 650; }
+.term-tab.on { background: #0c1e27; color: #d7e4ec; border-color: #0c1e27; }
+.term-tab-x { width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center; opacity: .75; }
+.term-tab-x:hover { background: rgba(127, 127, 127, .18); opacity: 1; }
+.term-tab-add { width: 34px; border-radius: 10px; border-style: dashed; font-size: 18px; }
+.term-tab-add:disabled, .term-tab-add[disabled] { opacity: .45; cursor: default; }
+.term-dot { width: 7px; height: 7px; border-radius: 50%; background: #98a4ae; }
+.term-dot.on { background: var(--mint); }
+.term-dot.bad { background: var(--red); }
+.term-empty { flex: 1; display: grid; place-items: center; align-content: center; gap: 12px; color: var(--muted); background: #0c1e27; }
+.term-empty p { color: #d7e4ec; }
 .term-host { flex: 1; min-height: 0; background: #0c1e27; overflow: hidden; }
 .term-host .xterm-viewport { background-color: #0c1e27 !important; }
+.cmd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #60707b; flex: none; }
 .live i { width: 8px; height: 8px; border-radius: 50%; background: #98a4ae; }
 .live.on { color: #12915f; }
@@ -389,5 +406,5 @@ textarea.text { height: auto; padding: 10px 12px; }
   .preview { position: static; }
   .term-page { height: auto; min-height: 70vh; }
   .term-card { min-height: 420px; }
-  .term-bar { flex-wrap: wrap; }
+  .term-bar, .term-tabs { flex-wrap: wrap; }
 }

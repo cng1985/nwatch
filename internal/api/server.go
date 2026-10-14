@@ -79,6 +79,7 @@ func NewServer(
 		services: svcctl.New(cfg.Service.Enabled),
 		engine:   gin.New(), started: time.Now(),
 	}
+	s.shellHub.SetRecorder(s.recordShellCommand)
 	s.engine.Use(gin.Recovery())
 	s.routes()
 	s.http = &http.Server{
@@ -182,6 +183,7 @@ func (s *Server) routes() {
 	authed.POST("/services/:name/restart", s.permit(rbac.PermServiceWrite), s.restartService)
 	authed.GET("/services/:name/logs", s.permit(rbac.PermServiceRead), s.serviceLogs)
 	authed.GET("/shell", s.permit(rbac.PermShellUse), s.shellInfo)
+	authed.GET("/shell/commands", s.shellCommands)
 	authed.POST("/shell/ticket", s.permit(rbac.PermShellUse), s.shellTicket)
 	s.engine.GET("/api/shell/ws", s.shellConnect)
 	s.engine.NoRoute(s.frontend)

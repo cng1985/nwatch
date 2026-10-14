@@ -49,6 +49,9 @@ type ticket struct {
 	exp  time.Time
 }
 
+// CommandRecorder 记录一条已经提交的终端命令。
+type CommandRecorder func(username, remote, sessionID, command string)
+
 // Hub 签发一次性连接凭证，并限制同时存在的终端数量。
 type Hub struct {
 	opts     Options
@@ -56,6 +59,7 @@ type Hub struct {
 	closed   bool
 	sessions map[string]*Session
 	tickets  map[string]ticket
+	record   CommandRecorder
 }
 
 func NewHub(opts Options) *Hub {
@@ -78,6 +82,22 @@ func NewHub(opts Options) *Hub {
 		opts:     opts,
 		sessions: map[string]*Session{},
 		tickets:  map[string]ticket{},
+	}
+}
+
+// SetRecorder 设置命令审计回调。nil 表示只维护会话，不另外记录命令。
+func (h *Hub) SetRecorder(fn CommandRecorder) {
+	h.mu.Lock()
+	h.record = fn
+	h.mu.Unlock()
+}
+
+func (h *Hub) emit(username, remote, sessionID, command string) {
+	h.mu.Lock()
+	fn := h.record
+	h.mu.Unlock()
+	if fn != nil {
+		fn(username, remote, sessionID, command)
 	}
 }
 
