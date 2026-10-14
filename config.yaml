@@ -54,3 +54,15 @@ shell:
 # 身份与 NMonitor 进程相同。没有 systemd 时页面会提示不可用。
 service:
   enabled: true
+
+# 管理台里的 Docker。通过本机 docker 客户端列出容器和镜像，并启动、停止、重启容器。
+# 身份与 NMonitor 进程相同。没有 docker 或连不上守护进程时，页面会提示不可用。
+docker:
+  enabled: true
+
+# 管理台里的 Kubernetes。通过本机 kubectl 查看工作负载，滚动重启、调整副本，并读取 Pod 日志。
+# context 和 kubeconfig 留空时使用当前环境的默认配置。
+kubernetes:
+  enabled: true
+  context: ""
+  kubeconfig: ""

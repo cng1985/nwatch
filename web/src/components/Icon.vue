@@ -30,6 +30,8 @@
     <path v-else-if="name === 'terminal'" d="M4 6h16v12H4zM7 10l3 2-3 2M12 14h5" />
     <path v-else-if="name === 'clock'" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v6l4 2" />
     <path v-else-if="name === 'service'" d="M4 5h16v5H4zM4 14h16v5H4zM7 7.5h.01M7 16.5h.01" />
+    <path v-else-if="name === 'docker'" d="M4 15.2c0 2.6 2.2 4.3 5.4 4.3h6.2c2.4 0 4.4-1.5 4.4-3.6 0-1.8-1.4-3.2-3.4-3.5h-.3A4.4 4.4 0 0 0 8.4 9.2 3.5 3.5 0 0 0 4 12.4v2.8zM8.2 10.2V7.4M11.2 10.2V6.2M14.2 10.2V8" />
+    <path v-else-if="name === 'kube'" d="M12 3 20 7.5v9L12 21l-8-4.5v-9zM12 8.2 16.2 10.6v4.8L12 17.8 7.8 15.4v-4.8z" />
   </svg>
 </template>
 

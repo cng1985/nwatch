@@ -114,6 +114,10 @@ const demoCatalog = [
     { key: 'script.read', label: '查看脚本记录' }, { key: 'script.write', label: '执行脚本' },
     { key: 'cron.read', label: '查看定时任务' }, { key: 'cron.write', label: '管理定时任务' }, { key: 'shell.use', label: '使用在线终端' },
   ] },
+  { key: 'cluster', label: '容器', items: [
+    { key: 'docker.read', label: '查看 Docker' }, { key: 'docker.write', label: '管理 Docker' },
+    { key: 'kube.read', label: '查看 Kubernetes' }, { key: 'kube.write', label: '管理 Kubernetes' },
+  ] },
   { key: 'alert', label: '告警', items: [
     { key: 'event.read', label: '查看告警' }, { key: 'notifier.read', label: '查看通知渠道' }, { key: 'notifier.write', label: '管理通知渠道' },
   ] },

@@ -126,10 +126,10 @@ func (s *Store) Ensure(cfg *config.Config, prefs *settings.Store) error {
 	if err := s.ensureRole(RoleAdmin, "管理员", "管理系统配置、用户、角色，以及全部监控和主机操作。", All(), true); err != nil {
 		return err
 	}
-	if err := s.ensureRole(RoleOperator, "运维", "管理监控、通知、脚本、定时任务和系统服务，不能修改系统配置、使用在线终端或管理账号。", operatorPerms(), false); err != nil {
+	if err := s.ensureRole(RoleOperator, "运维", "管理监控、通知、脚本、定时任务、系统服务、Docker 和 Kubernetes，不能修改系统配置、使用在线终端或管理账号。", operatorPerms(), false); err != nil {
 		return err
 	}
-	if err := s.ensureRole(RoleViewer, "只读", "查看监控、主机、告警和运行日志。", viewerPerms(), false); err != nil {
+	if err := s.ensureRole(RoleViewer, "只读", "查看监控、主机、告警、运行日志、Docker 和 Kubernetes。", viewerPerms(), false); err != nil {
 		return err
 	}
 	var count int64
@@ -199,10 +199,37 @@ func (s *Store) ensureRole(key, name, description string, perms []string, syncPe
 	if syncPerms && role.Permissions != string(raw) {
 		updates["permissions"] = string(raw)
 	}
+	if !syncPerms && samePermSet(role.Permissions, legacyPerms(key)) {
+		updates["permissions"] = string(raw)
+		if role.Description != description {
+			updates["description"] = description
+		}
+	}
 	if len(updates) == 0 {
 		return nil
 	}
 	return s.db.Model(&role).Updates(updates).Error
+}
+
+func samePermSet(stored string, keys []string) bool {
+	if len(keys) == 0 || strings.TrimSpace(stored) == "" {
+		return false
+	}
+	var got []string
+	if err := json.Unmarshal([]byte(stored), &got); err != nil || len(got) != len(keys) {
+		return false
+	}
+	want := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		want[key] = struct{}{}
+	}
+	for _, key := range got {
+		if _, ok := want[key]; !ok {
+			return false
+		}
+		delete(want, key)
+	}
+	return len(want) == 0
 }
 
 // Authenticate 校验用户名和密码。

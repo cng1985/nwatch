@@ -11,17 +11,19 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Database  DatabaseConfig  `yaml:"database"`
-	Scheduler SchedulerConfig `yaml:"scheduler"`
-	Monitor   MonitorConfig   `yaml:"monitor"`
-	History   HistoryConfig   `yaml:"history"`
-	Security  SecurityConfig  `yaml:"security"`
-	Log       LogConfig       `yaml:"log"`
-	Backup    BackupConfig    `yaml:"backup"`
-	Mail      MailConfig      `yaml:"mail"`
-	Shell     ShellConfig     `yaml:"shell"`
-	Service   ServiceConfig   `yaml:"service"`
+	Server     ServerConfig     `yaml:"server"`
+	Database   DatabaseConfig   `yaml:"database"`
+	Scheduler  SchedulerConfig  `yaml:"scheduler"`
+	Monitor    MonitorConfig    `yaml:"monitor"`
+	History    HistoryConfig    `yaml:"history"`
+	Security   SecurityConfig   `yaml:"security"`
+	Log        LogConfig        `yaml:"log"`
+	Backup     BackupConfig     `yaml:"backup"`
+	Mail       MailConfig       `yaml:"mail"`
+	Shell      ShellConfig      `yaml:"shell"`
+	Service    ServiceConfig    `yaml:"service"`
+	Docker     DockerConfig     `yaml:"docker"`
+	Kubernetes KubernetesConfig `yaml:"kubernetes"`
 
 	ConfigPath string `yaml:"-"`
 }
@@ -87,6 +89,18 @@ type ServiceConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// DockerConfig 控制管理台里的本机 Docker 管理。
+type DockerConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// KubernetesConfig 控制管理台里的 kubectl 管理。Context 和 Kubeconfig 为空时使用本机默认配置。
+type KubernetesConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	Context    string `yaml:"context"`
+	Kubeconfig string `yaml:"kubeconfig"`
+}
+
 // ShellConfig 控制管理台里的交互式终端。
 type ShellConfig struct {
 	Enabled     bool          `yaml:"enabled"`
@@ -117,7 +131,9 @@ func Default() *Config {
 			MaxLifetime: 4 * time.Hour,
 			MaxSessions: 8,
 		},
-		Service: ServiceConfig{Enabled: true},
+		Service:    ServiceConfig{Enabled: true},
+		Docker:     DockerConfig{Enabled: true},
+		Kubernetes: KubernetesConfig{Enabled: true},
 	}
 }
 
@@ -192,6 +208,18 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("NMONITOR_SERVICE_ENABLED"); v != "" {
 		c.Service.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
+	if v := os.Getenv("NMONITOR_DOCKER_ENABLED"); v != "" {
+		c.Docker.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
+	if v := os.Getenv("NMONITOR_KUBERNETES_ENABLED"); v != "" {
+		c.Kubernetes.Enabled = v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+	}
+	if v := os.Getenv("NMONITOR_KUBE_CONTEXT"); v != "" {
+		c.Kubernetes.Context = v
+	}
+	if v := os.Getenv("NMONITOR_KUBECONFIG"); v != "" {
+		c.Kubernetes.Kubeconfig = v
 	}
 }
 
@@ -277,4 +305,6 @@ func (c *Config) normalize() {
 	if c.Shell.MaxSessions > 32 {
 		c.Shell.MaxSessions = 32
 	}
+	c.Kubernetes.Context = strings.TrimSpace(c.Kubernetes.Context)
+	c.Kubernetes.Kubeconfig = strings.TrimSpace(c.Kubernetes.Kubeconfig)
 }

@@ -20,6 +20,11 @@ const (
 	PermCronWrite    = "cron.write"
 	PermShellUse     = "shell.use"
 
+	PermDockerRead  = "docker.read"
+	PermDockerWrite = "docker.write"
+	PermKubeRead    = "kube.read"
+	PermKubeWrite   = "kube.write"
+
 	PermEventRead     = "event.read"
 	PermNotifierRead  = "notifier.read"
 	PermNotifierWrite = "notifier.write"
@@ -74,6 +79,11 @@ var catalog = []permDef{
 	{PermCronRead, "查看定时任务", "host", "主机"},
 	{PermCronWrite, "管理定时任务", "host", "主机"},
 	{PermShellUse, "使用在线终端", "host", "主机"},
+
+	{PermDockerRead, "查看 Docker", "cluster", "容器"},
+	{PermDockerWrite, "管理 Docker", "cluster", "容器"},
+	{PermKubeRead, "查看 Kubernetes", "cluster", "容器"},
+	{PermKubeWrite, "管理 Kubernetes", "cluster", "容器"},
 
 	{PermEventRead, "查看告警", "alert", "告警"},
 	{PermNotifierRead, "查看通知渠道", "alert", "告警"},
@@ -165,10 +175,59 @@ func operatorPerms() []string {
 		PermServiceRead, PermServiceWrite,
 		PermScriptRead, PermScriptWrite,
 		PermCronRead, PermCronWrite,
+		PermDockerRead, PermDockerWrite,
+		PermKubeRead, PermKubeWrite,
 		PermEventRead,
 		PermNotifierRead, PermNotifierWrite,
 		PermLogRead,
 		PermSettingsRead,
+	}
+}
+
+// legacyOperatorPerms 是加入 Docker 和 Kubernetes 之前的运维默认权限。
+// 启动时只把仍保持这份权限的内置角色补上新权限，已经改过的角色保持原样。
+func legacyOperatorPerms() []string {
+	return []string{
+		PermDashboardRead,
+		PermMonitorRead, PermMonitorWrite,
+		PermCertRead,
+		PermGroupRead, PermGroupWrite,
+		PermHostRead,
+		PermServiceRead, PermServiceWrite,
+		PermScriptRead, PermScriptWrite,
+		PermCronRead, PermCronWrite,
+		PermEventRead,
+		PermNotifierRead, PermNotifierWrite,
+		PermLogRead,
+		PermSettingsRead,
+	}
+}
+
+// legacyViewerPerms 是加入 Docker 和 Kubernetes 之前的只读默认权限。
+func legacyViewerPerms() []string {
+	return []string{
+		PermDashboardRead,
+		PermMonitorRead,
+		PermCertRead,
+		PermGroupRead,
+		PermHostRead,
+		PermServiceRead,
+		PermScriptRead,
+		PermCronRead,
+		PermEventRead,
+		PermNotifierRead,
+		PermLogRead,
+	}
+}
+
+func legacyPerms(key string) []string {
+	switch key {
+	case RoleOperator:
+		return legacyOperatorPerms()
+	case RoleViewer:
+		return legacyViewerPerms()
+	default:
+		return nil
 	}
 }
 
@@ -182,6 +241,8 @@ func viewerPerms() []string {
 		PermServiceRead,
 		PermScriptRead,
 		PermCronRead,
+		PermDockerRead,
+		PermKubeRead,
 		PermEventRead,
 		PermNotifierRead,
 		PermLogRead,
