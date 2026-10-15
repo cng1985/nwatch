@@ -5,13 +5,15 @@
         <div class="logo-sq"><Icon name="wave" /></div>
         <div><strong>NMonitor</strong><small>轻量级服务监控</small></div>
       </div>
-      <div v-for="group in groups" :key="group.label">
-        <div class="nav-label">{{ group.label }}</div>
-        <router-link v-for="item in group.items" :key="item.to" :to="item.to" class="nav-item" :class="{ active: route.meta.nav === item.to }">
-          <Icon :name="item.icon" /> {{ item.label }}
-          <i v-if="item.badge && alerts" class="badge">{{ alerts }}</i>
-        </router-link>
-      </div>
+      <nav class="side-nav">
+        <div v-for="group in groups" :key="group.label">
+          <div class="nav-label">{{ group.label }}</div>
+          <router-link v-for="item in group.items" :key="item.to" :to="item.to" class="nav-item" :class="{ active: route.meta.nav === item.to }">
+            <Icon :name="item.icon" /> {{ item.label }}
+            <i v-if="item.badge && alerts" class="badge">{{ alerts }}</i>
+          </router-link>
+        </div>
+      </nav>
       <div class="side-foot">
         <div class="run-state"><i class="dot"></i> {{ healthy ? '系统运行正常' : '系统状态未知' }}</div>
         <div class="ver">v1.0.0</div>
