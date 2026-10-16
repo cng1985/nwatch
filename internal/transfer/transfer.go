@@ -41,6 +41,7 @@ type MonitorItem struct {
 	Method              string            `json:"method,omitempty"`
 	Headers             map[string]string `json:"headers,omitempty"`
 	Body                string            `json:"body,omitempty"`
+	BodyType            string            `json:"bodyType,omitempty"`
 	Interval            int               `json:"interval"`
 	Timeout             int               `json:"timeout"`
 	Enabled             bool              `json:"enabled"`
@@ -104,7 +105,7 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 	for _, m := range monitors {
 		item := MonitorItem{
 			Name: m.Name, Type: m.Type, URL: m.URL, Host: m.Host, Port: m.Port, Method: m.Method,
-			Headers: m.Headers, Body: m.Body, Interval: m.Interval, Timeout: m.Timeout, Enabled: m.Enabled,
+			Headers: m.Headers, Body: m.Body, BodyType: m.BodyType, Interval: m.Interval, Timeout: m.Timeout, Enabled: m.Enabled,
 			FailureThreshold: m.FailureThreshold, RecoveryThreshold: m.RecoveryThreshold,
 			ExpectedStatusCodes: m.ExpectedStatusCodes, BodyContains: m.BodyContains, BodyNotContains: m.BodyNotContains,
 			FollowRedirects: m.FollowRedirects, TLSWarningDays: m.TLSWarningDays, TLSCriticalDays: m.TLSCriticalDays,
@@ -213,6 +214,7 @@ func Import(db *gorm.DB, b Bundle) error {
 			row.Headers = item.Headers
 			row.SyncHeaders()
 			row.Body = item.Body
+			row.BodyType = item.BodyType
 			row.Interval = item.Interval
 			row.Timeout = item.Timeout
 			row.Enabled = item.Enabled

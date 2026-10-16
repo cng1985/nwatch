@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -43,6 +44,33 @@ func TestHTTPCheckerStatusAndBody(t *testing.T) {
 	res, err = c.Check(context.Background(), m)
 	if err != nil || res.Success || res.StatusCode != 401 {
 		t.Fatalf("status mismatch result=%+v err=%v", res, err)
+	}
+}
+
+func TestHTTPCheckerPostBody(t *testing.T) {
+	var method, ctype, body string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		method, ctype, body = r.Method, r.Header.Get("Content-Type"), string(raw)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	c := NewHTTPChecker()
+	m := &model.Monitor{
+		URL: srv.URL, Method: "POST", Timeout: 3, ExpectedStatusCodes: "200", FollowRedirects: true,
+		BodyType: "json", Body: `{"tenant":141}`, Headers: map[string]string{"X-Token": "secret"},
+	}
+	res, err := c.Check(context.Background(), m)
+	if err != nil || !res.Success || method != http.MethodPost || ctype != "application/json" || body != `{"tenant":141}` {
+		t.Fatalf("result=%+v err=%v method=%s type=%s body=%s", res, err, method, ctype, body)
+	}
+	m.Method = "GET"
+	m.BodyType = "json"
+	m.Body = `{"tenant":141}`
+	res, err = c.Check(context.Background(), m)
+	if err != nil || !res.Success || method != http.MethodGet || body != "" {
+		t.Fatalf("get result=%+v err=%v method=%s body=%s", res, err, method, body)
 	}
 }
 

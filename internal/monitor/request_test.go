@@ -45,3 +45,42 @@ func TestNormalizeResourceAndScript(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNormalizeHTTPBody(t *testing.T) {
+	req := &Request{
+		Name: "API", Type: model.TypeHTTP, URL: "https://example.com/hook", Method: "POST",
+		BodyType: "formdata", Body: "tenant=141\nok=1", Interval: 60, Timeout: 5,
+	}
+	if err := req.Normalize(60, 5); err != nil {
+		t.Fatal(err)
+	}
+	if req.BodyType != "formdata" || req.Body != "ok=1&tenant=141" {
+		t.Fatalf("%s %s", req.BodyType, req.Body)
+	}
+	legacy := &Request{
+		Name: "旧请求", Type: model.TypeHTTP, URL: "https://example.com/hook", Method: "POST",
+		Body: "hello", Interval: 60, Timeout: 5,
+	}
+	if err := legacy.Normalize(60, 5); err != nil || legacy.BodyType != "text" || legacy.Body != "hello" {
+		t.Fatalf("%+v %v", legacy, err)
+	}
+	get := &Request{
+		Name: "健康检查", Type: model.TypeHTTP, URL: "http://example.com/health", Method: "GET",
+		BodyType: "json", Body: `{"ok":true}`, Interval: 60, Timeout: 5,
+	}
+	if err := get.Normalize(60, 5); err != nil || get.Body != "" || get.BodyType != "" {
+		t.Fatalf("%+v %v", get, err)
+	}
+	bad := &Request{
+		Name: "坏 JSON", Type: model.TypeHTTP, URL: "https://example.com", Method: "POST",
+		BodyType: "json", Body: "{", Interval: 60, Timeout: 5,
+	}
+	if err := bad.Normalize(60, 5); err == nil {
+		t.Fatal("expected json error")
+	}
+	var saved model.Monitor
+	req.Apply(&saved)
+	if saved.BodyType != "formdata" || saved.Body != "ok=1&tenant=141" {
+		t.Fatalf("%+v", saved)
+	}
+}

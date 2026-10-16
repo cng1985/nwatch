@@ -38,8 +38,21 @@
         <section class="card section">
           <h3><em>02</em> 检测配置</h3>
           <div class="form-grid">
-            <label v-if="form.kind === 'http' || form.kind === 'https' || form.kind === 'tls'" class="field full"><span class="req">目标 URL</span>
-              <input v-model="form.url" class="text" :placeholder="form.kind === 'tls' ? 'api.example.com' : 'https://erp.example.com/health'" />
+            <div v-if="form.kind === 'http' || form.kind === 'https'" class="full">
+              <HttpRequest
+                ref="requestRef"
+                v-model:url="form.url"
+                v-model:method="form.method"
+                v-model:body-type="form.bodyType"
+                v-model:headers="form.headers"
+                v-model:body="form.body"
+                url-label="目标 URL"
+                :placeholder="form.kind === 'https' ? 'https://erp.example.com/health' : 'http://erp.example.com/health'"
+                :methods="['GET', 'POST', 'HEAD']"
+              />
+            </div>
+            <label v-else-if="form.kind === 'tls'" class="field full"><span class="req">目标 URL</span>
+              <input v-model="form.url" class="text" placeholder="api.example.com" />
             </label>
             <template v-else-if="form.kind === 'tcp'">
               <label class="field"><span class="req">主机</span><input v-model="form.host" class="text" placeholder="192.168.1.100" /></label>
@@ -60,9 +73,6 @@
               <label class="field"><span>输出包含</span><input v-model="form.bodyContains" class="text" placeholder="active" /></label>
               <p class="full demo-note">脚本在服务器上以 NMonitor 进程用户执行。退出码 0 视为成功。</p>
             </template>
-            <label v-if="form.kind === 'http' || form.kind === 'https'" class="field"><span class="req">请求方法</span>
-              <select v-model="form.method" class="select" style="width:100%"><option>GET</option><option>POST</option><option>HEAD</option></select>
-            </label>
             <label v-if="form.kind === 'http' || form.kind === 'https'" class="field"><span class="req">期望状态码</span>
               <input v-model="form.expectedStatusCodes" class="text" placeholder="200" />
             </label>
@@ -104,6 +114,7 @@
           <div><b>{{ form.name || '未命名监控' }}</b><small style="color:#7e8c98">{{ previewTarget }}</small></div>
         </div>
         <div class="kv"><span>监控类型</span><b>{{ currentKind.label }}</b></div>
+        <div v-if="form.kind === 'http' || form.kind === 'https'" class="kv"><span>请求</span><b>{{ requestPreview }}</b></div>
         <div class="kv"><span>检测频率</span><b>每 {{ intervalLabel }}</b></div>
         <div class="kv"><span>超时时间</span><b>{{ form.timeout }} 秒</b></div>
         <div class="kv"><span>异常判定</span><b>连续失败 {{ form.failureThreshold }} 次</b></div>
@@ -122,7 +133,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import HttpRequest from '../components/HttpRequest.vue'
 import Icon from '../components/Icon.vue'
+import { requestLabel } from '../components/httpRequest.js'
 import { api } from '../api'
 import { demoGroups, presentDemo } from '../demo'
 import { isDemo } from '../format'
@@ -135,6 +148,7 @@ const groups = ref([])
 const saving = ref(false)
 const error = ref('')
 const advanced = ref(false)
+const requestRef = ref(null)
 const kinds = [
   { id: 'http', label: 'HTTP', icon: 'globe' },
   { id: 'https', label: 'HTTPS', icon: 'lock' },
@@ -150,11 +164,13 @@ const form = reactive({
   name: '', groupId: null, kind: 'https', url: '', host: '', port: 443, method: 'GET',
   expectedStatusCodes: '200', interval: 60, timeout: 5, failureThreshold: 3, recoveryThreshold: 1,
   bodyContains: '', bodyNotContains: '', followRedirects: true, tlsWarningDays: 14, tlsCriticalDays: 7,
+  headers: {}, body: '', bodyType: '',
   tlsNotifyDays: '30,14,7,3,1,0', notifierIds: [], enabled: true,
   threshold: 90, command: '', workDir: '',
 })
 const currentKind = computed(() => kinds.find((item) => item.id === form.kind))
 const intervalLabel = computed(() => intervals.find((item) => item[0] === form.interval)?.[1] || form.interval + ' 秒')
+const requestPreview = computed(() => requestLabel(form.method, form.bodyType))
 const previewTarget = computed(() => {
   if (form.kind === 'tcp') return form.host ? `${form.host}:${form.port || ''}` : '未填写地址'
   if (form.kind === 'cpu') return `CPU 超过 ${form.threshold || 90}%`
@@ -169,6 +185,11 @@ function cancel() { router.push('/monitors') }
 async function save() {
   error.value = ''
   if (demoMode) { error.value = '演示模式不会写入服务器'; return }
+  const httpKind = form.kind === 'http' || form.kind === 'https'
+  if (httpKind && requestRef.value) {
+    const message = requestRef.value.validate()
+    if (message) { error.value = message; return }
+  }
   const passthrough = ['tcp', 'tls', 'cpu', 'memory', 'disk', 'script']
   const type = passthrough.includes(form.kind) ? form.kind : 'http'
   let url = (form.url || '').trim()
@@ -177,7 +198,10 @@ async function save() {
   const payload = {
     ...form, type, url, groupId: form.groupId || null,
     host: form.host,
-    headers: {},
+    headers: httpKind ? (form.headers || {}) : {},
+    body: httpKind ? (form.body || '') : '',
+    bodyType: httpKind ? (form.bodyType || '') : '',
+    method: httpKind ? (form.method || 'GET') : '',
   }
   saving.value = true
   try {
@@ -198,7 +222,7 @@ onMounted(async () => {
     const row = editing.value ? presentDemo().overview.find((item) => String(item.id) === String(route.params.id)) : null
     if (row) {
       const kind = kindOf(row)
-      Object.assign(form, row, { kind, groupId: row.groupId || null, notifierIds: [1, 2] })
+      Object.assign(form, row, { kind, groupId: row.groupId || null, notifierIds: [1, 2], headers: row.headers || {}, body: row.body || '', bodyType: row.bodyType || '' })
     } else if (!editing.value) {
       Object.assign(form, { name: 'ERP API', groupId: 1, kind: 'https', url: 'https://erp.example.com/health', notifierIds: [1, 2] })
     }
@@ -208,7 +232,7 @@ onMounted(async () => {
   if (!editing.value) return
   const row = await api('/api/monitors/' + route.params.id)
   const kind = kindOf(row)
-  Object.assign(form, row, { kind, notifierIds: row.notifierIds || [] })
+  Object.assign(form, row, { kind, notifierIds: row.notifierIds || [], headers: row.headers || {}, body: row.body || '', bodyType: row.bodyType || '' })
 })
 
 function kindOf(row) {

@@ -19,7 +19,7 @@ config.yaml
 - TCP 端口连通性
 - 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警。进程可按 CPU 或内存排序查看
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
-- 定时任务：用 5 段 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间按系统配置里的时区计算，同一个任务不会重叠执行
+- 定时任务：用 5 段 cron 表达式执行脚本，或发起 HTTP/HTTPS 请求。POST 支持 JSON、Form、FormData、XML 和 Text。时间按系统配置里的时区计算，同一个任务不会重叠执行
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
 - 系统服务：在管理台列出本机 systemd 服务，启动、停止、重启，并用 journalctl 查看日志
 - Docker：列出本机容器和镜像，启动、停止、重启容器，并查看日志
@@ -258,7 +258,7 @@ GET/PUT/DELETE  /api/access/users/:id
 
 管理台的「定时任务」按 cron 表达式执行，例如 `0 2 * * *` 表示每天 02:00。新建和编辑时可以用 cron 组件按分、时、日、月、周选择任意、间隔、范围或指定值，也可以直接填写表达式。也支持 `@hourly`、`@daily`、`@weekly`、`@monthly`、`@yearly`。月份可以用 `JAN` 到 `DEC`，星期可以用 `SUN` 到 `SAT`，`0` 和 `7` 都是周日。
 
-任务可以是脚本，也可以是网络请求。网络请求支持 GET、POST 表单和 POST JSON。表单按 `key=value` 发送，JSON 会带上 `Content-Type: application/json`。状态码在 200 到 299 之间算成功。
+任务可以是脚本，也可以是网络请求。网络请求支持 GET，以及 POST 的 JSON、Form、FormData、XML 和 Text。表单和 FormData 按 `key=value` 填写，发送时分别使用 `application/x-www-form-urlencoded` 和 `multipart/form-data`。JSON、XML、Text 会带上对应的 Content-Type。状态码在 200 到 299 之间算成功。
 
 执行时间使用系统配置中的时区。超时最长 1 小时，执行记录保留 30 天。任务还在跑时，下一次到点会被跳过，同一个任务不会并行执行。配置导入导出会带上这些任务。
 

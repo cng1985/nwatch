@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cng1985/nwatch/internal/httpreq"
 	"github.com/cng1985/nwatch/internal/model"
 )
 
@@ -50,16 +51,23 @@ func (c *HTTPChecker) Check(ctx context.Context, m *model.Monitor) (*Result, err
 	if method == "" {
 		method = http.MethodGet
 	}
-	var body io.Reader
-	if m.Body != "" && method != http.MethodHead {
-		body = strings.NewReader(m.Body)
+	bodyType, bodyText := m.BodyType, m.Body
+	if method == http.MethodGet || method == http.MethodHead {
+		bodyType, bodyText = "", ""
 	}
-	req, err := http.NewRequestWithContext(ctx, method, m.URL, body)
+	encoded, err := httpreq.Encode(bodyType, bodyText)
+	if err != nil {
+		return failResult("INVALID_BODY", err.Error()), nil
+	}
+	req, err := http.NewRequestWithContext(ctx, method, m.URL, encoded.Body)
 	if err != nil {
 		return failResult("INVALID_URL", err.Error()), nil
 	}
 	for k, v := range m.Headers {
 		req.Header.Set(k, v)
+	}
+	if encoded.ContentType != "" {
+		req.Header.Set("Content-Type", encoded.ContentType)
 	}
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", "NMonitor/1.0")

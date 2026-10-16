@@ -3,7 +3,7 @@
     <div class="page-head">
       <div>
         <h1>定时任务</h1>
-        <p>按 cron 表达式执行脚本，或发起 GET、POST 表单、POST JSON 请求。时间使用系统配置里的时区，同一任务不会重叠执行。</p>
+        <p>按 cron 表达式执行脚本，或发起 HTTP/HTTPS 请求。请求可以是 GET，也可以按 JSON、Form、FormData、XML、Text 发送 POST。时间使用系统配置里的时区，同一任务不会重叠执行。</p>
       </div>
       <div class="head-actions">
         <button class="btn ghost" @click="openAllRuns">执行记录</button>
@@ -34,10 +34,19 @@
             <label class="field full"><span>工作目录</span><input v-model="form.workDir" class="text" placeholder="/tmp" /></label>
           </template>
           <template v-else>
-            <label class="field full"><span class="req">请求地址</span><input v-model="form.url" class="text" placeholder="https://example.com/hook" /></label>
-            <label class="field full"><span>请求头</span><textarea v-model="form.headersText" class="text" rows="3" placeholder="Authorization: Bearer token"></textarea></label>
-            <label v-if="action === 'post_form'" class="field full"><span>表单</span><textarea v-model="form.body" class="text" rows="5" placeholder="name=nmonitor&#10;ok=1"></textarea></label>
-            <label v-if="action === 'post_json'" class="field full"><span class="req">JSON</span><textarea v-model="form.body" class="text" rows="5" placeholder='{"ok":true}'></textarea></label>
+            <div class="full">
+              <HttpRequest
+                ref="requestRef"
+                v-model:url="form.url"
+                v-model:method="form.method"
+                v-model:body-type="form.bodyType"
+                v-model:headers="form.headers"
+                v-model:body="form.body"
+                url-label="请求地址"
+                placeholder="https://example.com/hook"
+                :methods="['GET', 'POST']"
+              />
+            </div>
           </template>
           <label class="field check"><input v-model="form.enabled" type="checkbox" /> 启用</label>
         </div>
@@ -152,7 +161,9 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import CronExpr from '../components/CronExpr.vue'
+import HttpRequest from '../components/HttpRequest.vue'
 import Icon from '../components/Icon.vue'
+import { requestLabel } from '../components/httpRequest.js'
 import { api } from '../api'
 import { can } from '../session'
 import { clock, isDemo, relative } from '../format'
@@ -160,9 +171,7 @@ import { clock, isDemo, relative } from '../format'
 const timeouts = [[10, '10 秒'], [30, '30 秒'], [60, '1 分钟'], [120, '2 分钟'], [300, '5 分钟'], [600, '10 分钟'], [1800, '30 分钟'], [3600, '1 小时']]
 const actions = [
   { id: 'script', label: '脚本' },
-  { id: 'get', label: 'GET' },
-  { id: 'post_form', label: 'POST 表单' },
-  { id: 'post_json', label: 'POST JSON' },
+  { id: 'http', label: 'HTTP' },
 ]
 
 const timezone = ref('Asia/Shanghai')
@@ -189,20 +198,16 @@ const resultCodeLabel = computed(() => {
   return job && job.kind === 'http' ? '状态码' : '退出码'
 })
 const runningId = ref(0)
+const requestRef = ref(null)
 const form = reactive(blank())
-const action = computed(() => {
-  if (form.kind !== 'http') return 'script'
-  if (form.method === 'POST' && form.bodyType === 'json') return 'post_json'
-  if (form.method === 'POST') return 'post_form'
-  return 'get'
-})
+const action = computed(() => (form.kind === 'http' ? 'http' : 'script'))
 let timer = 0
 let previewTimer = 0
 
 function blank() {
   return {
     id: 0, name: '', cron: '0 2 * * *', kind: 'script', command: '', workDir: '',
-    url: '', method: '', bodyType: '', headersText: '', body: '', timeout: 60, description: '', enabled: true,
+    url: '', method: '', bodyType: '', headers: {}, body: '', timeout: 60, description: '', enabled: true,
   }
 }
 
@@ -230,47 +235,22 @@ function firstLine(value) {
 
 function targetOf(row) {
   if (row.targetText) return row.targetText
-  if (row.kind === 'http') {
-    const mode = row.method === 'POST' ? (row.bodyType === 'json' ? 'POST JSON' : 'POST 表单') : 'GET'
-    return `${mode} ${row.url || ''}`.trim()
-  }
+  if (row.kind === 'http') return `${requestLabel(row.method, row.bodyType)} ${row.url || ''}`.trim()
   return firstLine(row.command)
 }
 
-function headersToText(headers) {
-  return Object.entries(headers || {}).map(([key, value]) => `${key}: ${value}`).join('\n')
-}
-
-function textToHeaders(text) {
-  const headers = {}
-  for (const line of (text || '').split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const index = trimmed.indexOf(':')
-    if (index <= 0) throw new Error('请求头写成 Header: 值，每行一个')
-    headers[trimmed.slice(0, index).trim()] = trimmed.slice(index + 1).trim()
-  }
-  return headers
-}
-
 function setAction(next) {
-  const prev = action.value
   if (next === 'script') {
     form.kind = 'script'
     form.method = ''
     form.bodyType = ''
+    form.body = ''
+    form.url = ''
+    form.headers = {}
     return
   }
   form.kind = 'http'
-  if (next === 'get') {
-    form.method = 'GET'
-    form.bodyType = ''
-    form.body = ''
-    return
-  }
-  form.method = 'POST'
-  form.bodyType = next === 'post_json' ? 'json' : 'form'
-  if (next !== prev && (prev === 'post_json' || prev === 'post_form' || prev === 'get')) form.body = ''
+  if (!form.method) form.method = 'GET'
 }
 
 function runSummary(row) {
@@ -326,7 +306,7 @@ function startCreate() {
 }
 
 function edit(row) {
-  Object.assign(form, blank(), row, { id: row.id, enabled: !!row.enabled, headersText: headersToText(row.headers), kind: row.kind || 'script' })
+  Object.assign(form, blank(), row, { id: row.id, enabled: !!row.enabled, headers: { ...(row.headers || {}) }, body: row.body || '', bodyType: row.bodyType || '', kind: row.kind || 'script' })
   error.value = ''
   formOpen.value = true
   refreshPreview()
@@ -355,12 +335,10 @@ async function save() {
     error.value = '演示模式不会写入服务器'
     return
   }
-  let headers = {}
-  if (form.kind === 'http') {
-    try {
-      headers = textToHeaders(form.headersText)
-    } catch (err) {
-      error.value = err.message
+  if (form.kind === 'http' && requestRef.value) {
+    const message = requestRef.value.validate()
+    if (message) {
+      error.value = message
       return
     }
   }
@@ -368,7 +346,9 @@ async function save() {
   try {
     const body = {
       name: form.name, cron: form.cron, kind: form.kind || 'script', command: form.command, workDir: form.workDir,
-      url: form.url, method: form.method, bodyType: form.bodyType, headers, body: form.body,
+      url: form.url, method: form.method, bodyType: form.kind === 'http' ? form.bodyType : '',
+      headers: form.kind === 'http' ? (form.headers || {}) : {},
+      body: form.kind === 'http' ? form.body : '',
       timeout: form.timeout, description: form.description, enabled: form.enabled,
     }
     if (form.id) await api('/api/cron-jobs/' + form.id, { method: 'PUT', body })

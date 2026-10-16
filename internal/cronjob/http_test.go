@@ -35,6 +35,8 @@ func TestNormalizeHTTPModes(t *testing.T) {
 		{Name: "坏地址", Cron: "@daily", Kind: "http", URL: "ftp://example.com", Method: "GET"},
 		{Name: "坏 JSON", Cron: "@daily", Kind: "http", URL: "https://example.com", Method: "POST", BodyType: "json", Body: `{`},
 		{Name: "坏表单", Cron: "@daily", Kind: "http", URL: "https://example.com", Method: "POST", BodyType: "form", Body: "no-equals"},
+		{Name: "坏 XML", Cron: "@daily", Kind: "http", URL: "https://example.com", Method: "POST", BodyType: "xml", Body: "<root>"},
+		{Name: "未选类型", Cron: "@daily", Kind: "http", URL: "https://example.com", Method: "POST", Body: "hello"},
 	} {
 		if err := req.Normalize(); err == nil {
 			t.Fatalf("expected error for %s", req.Name)
@@ -76,6 +78,20 @@ func TestExecuteHTTP(t *testing.T) {
 	}, 5*time.Second)
 	if !postForm.Success || ctype != "application/x-www-form-urlencoded" || body != "a=1&b=two" {
 		t.Fatalf("form %+v type=%s body=%s", postForm, ctype, body)
+	}
+	postXML := executeHTTP(context.Background(), &model.CronJob{
+		Kind: model.CronKindHTTP, Method: "POST", BodyType: model.CronBodyXML,
+		URL: upstream.URL, Body: "<root/>",
+	}, 5*time.Second)
+	if !postXML.Success || ctype != "application/xml; charset=utf-8" || body != "<root/>" {
+		t.Fatalf("xml %+v type=%s body=%s", postXML, ctype, body)
+	}
+	postText := executeHTTP(context.Background(), &model.CronJob{
+		Kind: model.CronKindHTTP, Method: "POST", BodyType: model.CronBodyText,
+		URL: upstream.URL, Body: "hello",
+	}, 5*time.Second)
+	if !postText.Success || ctype != "text/plain; charset=utf-8" || body != "hello" {
+		t.Fatalf("text %+v type=%s body=%s", postText, ctype, body)
 	}
 	failed := executeHTTP(context.Background(), &model.CronJob{Kind: model.CronKindHTTP, Method: "GET", URL: upstream.URL + "/fail"}, 5*time.Second)
 	if failed.Success || failed.ExitCode != http.StatusBadGateway || !strings.Contains(failed.Message, "HTTP 502") {

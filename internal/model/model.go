@@ -68,6 +68,7 @@ type Monitor struct {
 	HeadersRaw string            `gorm:"column:headers;type:text" json:"-"`
 	Headers    map[string]string `gorm:"-" json:"headers"`
 	Body       string            `gorm:"type:text" json:"body"`
+	BodyType   string            `gorm:"size:16" json:"bodyType"`
 	// Threshold 是 CPU、内存、磁盘使用率告警线，单位是百分比。
 	Threshold float64 `json:"threshold"`
 	Command   string  `gorm:"type:text" json:"command"`
@@ -281,8 +282,11 @@ const (
 	CronKindScript = "script"
 	CronKindHTTP   = "http"
 
-	CronBodyForm = "form"
-	CronBodyJSON = "json"
+	CronBodyForm     = "form"
+	CronBodyJSON     = "json"
+	CronBodyFormData = "formdata"
+	CronBodyXML      = "xml"
+	CronBodyText     = "text"
 )
 
 // CronJob 是按 cron 表达式执行的定时任务。

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cng1985/nwatch/internal/host"
+	"github.com/cng1985/nwatch/internal/httpreq"
 	"github.com/cng1985/nwatch/internal/model"
 )
 
@@ -22,6 +23,7 @@ type Request struct {
 	Method              string            `json:"method"`
 	Headers             map[string]string `json:"headers"`
 	Body                string            `json:"body"`
+	BodyType            string            `json:"bodyType"`
 	Threshold           float64           `json:"threshold"`
 	Command             string            `json:"command"`
 	WorkDir             string            `json:"workDir"`
@@ -113,6 +115,18 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 			t := true
 			r.FollowRedirects = &t
 		}
+		switch r.Method {
+		case "GET", "HEAD":
+			r.BodyType = ""
+			r.Body = ""
+		case "POST":
+			bodyType, body, err := httpreq.Normalize(r.BodyType, r.Body, true)
+			if err != nil {
+				return err
+			}
+			r.BodyType = bodyType
+			r.Body = body
+		}
 	case model.TypeTCP:
 		if r.Host == "" || r.Port < 1 || r.Port > 65535 {
 			return errors.New("TCP 监控需要有效的主机和端口")
@@ -164,6 +178,9 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 			return errors.New("工作目录需要是绝对路径")
 		}
 	}
+	if r.Type != model.TypeHTTP {
+		r.BodyType = ""
+	}
 	if r.Enabled == nil {
 		t := true
 		r.Enabled = &t
@@ -185,6 +202,7 @@ func (r *Request) Apply(m *model.Monitor) {
 	m.Headers = r.Headers
 	m.SyncHeaders()
 	m.Body = r.Body
+	m.BodyType = r.BodyType
 	m.Threshold = r.Threshold
 	m.Command = r.Command
 	m.WorkDir = r.WorkDir
