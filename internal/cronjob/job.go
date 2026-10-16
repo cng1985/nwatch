@@ -1,7 +1,6 @@
 package cronjob
 
 import (
-	"encoding/json"
 	"errors"
 	"net/url"
 	"path/filepath"
@@ -9,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/cng1985/nwatch/internal/httpreq"
 	"github.com/cng1985/nwatch/internal/model"
 	"gorm.io/gorm"
 )
@@ -38,7 +38,6 @@ func (r *Request) Normalize() error {
 	r.URL = strings.TrimSpace(r.URL)
 	r.Method = strings.ToUpper(strings.TrimSpace(r.Method))
 	r.BodyType = strings.ToLower(strings.TrimSpace(r.BodyType))
-	r.Body = strings.TrimSpace(r.Body)
 	r.Description = strings.TrimSpace(r.Description)
 	if r.Name == "" {
 		return errors.New("名称不能为空")
@@ -137,8 +136,16 @@ func targetText(job *model.CronJob) string {
 			return "GET " + job.URL
 		case job.BodyType == model.CronBodyJSON:
 			return "POST JSON " + job.URL
-		default:
+		case job.BodyType == model.CronBodyForm:
 			return "POST 表单 " + job.URL
+		case job.BodyType == model.CronBodyFormData:
+			return "POST FormData " + job.URL
+		case job.BodyType == model.CronBodyXML:
+			return "POST XML " + job.URL
+		case job.BodyType == model.CronBodyText:
+			return "POST 文本 " + job.URL
+		default:
+			return "POST " + job.URL
 		}
 	}
 	return firstLine(job.Command)
@@ -180,28 +187,14 @@ func (r *Request) normalizeHTTP() error {
 		r.BodyType = ""
 		r.Body = ""
 	case "POST":
-		switch r.BodyType {
-		case model.CronBodyForm:
-			encoded, err := normalizeForm(r.Body)
-			if err != nil {
-				return err
-			}
-			r.Body = encoded
-		case model.CronBodyJSON:
-			if r.Body == "" {
-				return errors.New("JSON 内容不能为空")
-			}
-			if !json.Valid([]byte(r.Body)) {
-				return errors.New("JSON 格式不正确")
-			}
-		default:
-			return errors.New("POST 仅支持表单和 JSON")
+		bodyType, body, err := httpreq.Normalize(r.BodyType, r.Body, false)
+		if err != nil {
+			return err
 		}
-		if len(r.Body) > 64*1024 {
-			return errors.New("请求体不能超过 64KB")
-		}
+		r.BodyType = bodyType
+		r.Body = body
 	default:
-		return errors.New("网络请求仅支持 GET、POST 表单和 POST JSON")
+		return errors.New("网络请求仅支持 GET 和 POST")
 	}
 	cleaned := map[string]string{}
 	for key, value := range r.Headers {
@@ -221,34 +214,6 @@ func (r *Request) normalizeHTTP() error {
 		r.Headers = cleaned
 	}
 	return nil
-}
-
-func normalizeForm(body string) (string, error) {
-	body = strings.TrimSpace(body)
-	if body == "" {
-		return "", nil
-	}
-	if strings.Contains(body, "\n") {
-		values := url.Values{}
-		for _, line := range strings.Split(body, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			key, val, ok := strings.Cut(line, "=")
-			key = strings.TrimSpace(key)
-			if !ok || key == "" {
-				return "", errors.New("表单需要写成 key=value，每行一对")
-			}
-			values.Add(key, strings.TrimSpace(val))
-		}
-		return values.Encode(), nil
-	}
-	values, err := url.ParseQuery(body)
-	if err != nil || !strings.Contains(body, "=") {
-		return "", errors.New("表单需要写成 key=value")
-	}
-	return values.Encode(), nil
 }
 
 type Preview struct {

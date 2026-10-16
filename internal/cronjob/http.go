@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/cng1985/nwatch/internal/checker"
+	"github.com/cng1985/nwatch/internal/httpreq"
 	"github.com/cng1985/nwatch/internal/model"
 )
 
@@ -55,26 +56,27 @@ func executeHTTP(ctx context.Context, job *model.CronJob, timeout time.Duration)
 		timeout = 60 * time.Second
 	}
 	method := http.MethodGet
-	var body io.Reader
+	bodyType, bodyText := "", ""
 	if strings.EqualFold(job.Method, http.MethodPost) {
 		method = http.MethodPost
-		body = strings.NewReader(job.Body)
+		bodyType = job.BodyType
+		bodyText = job.Body
+	}
+	payload, err := httpreq.Encode(bodyType, bodyText)
+	if err != nil {
+		return fail("请求体不正确", false)
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, method, job.URL, body)
+	req, err := http.NewRequestWithContext(reqCtx, method, job.URL, payload.Body)
 	if err != nil {
 		return fail("地址不正确", false)
 	}
 	for key, value := range job.Headers {
 		req.Header.Set(key, value)
 	}
-	if method == http.MethodPost {
-		if job.BodyType == model.CronBodyJSON {
-			req.Header.Set("Content-Type", "application/json")
-		} else {
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		}
+	if payload.ContentType != "" {
+		req.Header.Set("Content-Type", payload.ContentType)
 	}
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", "NMonitor/1.0")
