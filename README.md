@@ -18,6 +18,7 @@ config.yaml
 - HTTPS 证书：到期时间、剩余天数、颁发机构、主机名和证书链
 - TCP 端口连通性
 - 本机 CPU、内存、磁盘：15 秒采样，1 小时到 7 天趋势；可按使用率阈值告警。进程可按 CPU 或内存排序查看
+- 进程监控：从本机进程中选择程序。进程停止后按现有通知渠道提醒；也可设置 CPU、内存阈值，超过后同样告警。进程重启后按进程名或命令行继续识别，不依赖 PID
 - 脚本执行：定时检查或在页面上手动执行，记录退出码和输出
 - 定时任务：用 5 段 cron 表达式执行脚本，或发起 HTTP/HTTPS 请求。POST 支持 JSON、Form、FormData、XML 和 Text。时间按系统配置里的时区计算，同一个任务不会重叠执行
 - 在线终端：登录后在管理台打开本机交互式 Shell。Linux 使用 bash 或 sh，Windows 10 1809 及以上通过 ConPTY 使用 PowerShell 或 cmd
@@ -46,7 +47,7 @@ internal/config/          读取 config.yaml 和环境变量
 internal/database/        打开并关闭 SQLite
 internal/model/           监控、告警、通知等数据模型
 internal/settings/        运行时可改的系统配置
-internal/checker/         HTTP、证书、TCP、资源和脚本检测
+internal/checker/         HTTP、证书、TCP、资源、脚本和进程检测
 internal/monitor/         监控请求的校验和规范化
 internal/state/           连续失败或成功后切换状态
 internal/scheduler/       每秒领取到期检测，工作池执行

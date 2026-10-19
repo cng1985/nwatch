@@ -75,14 +75,36 @@ func (c *Collector) Processes(sortBy string, limit int) (ProcessList, error) {
 	limit = normalizeProcessLimit(limit)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	items, at, err := c.loadProcessesLocked()
+	if err != nil {
+		return ProcessList{}, err
+	}
+	return finishProcessList(items, sortBy, limit, at), nil
+}
 
+// AllProcesses 返回当前全部进程，不按占用截断。进程监控用它查找目标，避免低占用进程被列表截掉。
+func (c *Collector) AllProcesses() ([]Process, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	items, _, err := c.loadProcessesLocked()
+	if err != nil {
+		return nil, err
+	}
+	out := append([]Process(nil), items...)
+	if out == nil {
+		out = []Process{}
+	}
+	return out, nil
+}
+
+func (c *Collector) loadProcessesLocked() ([]Process, time.Time, error) {
 	if len(c.procCached) > 0 && time.Since(c.procCacheAt) < processCacheTTL {
-		return finishProcessList(c.procCached, sortBy, limit, c.procCacheAt), nil
+		return c.procCached, c.procCacheAt, nil
 	}
 
 	cur, err := readProcSnapshot()
 	if err != nil {
-		return ProcessList{}, err
+		return nil, time.Time{}, err
 	}
 	if !c.hasProc || cur.Total < c.procBase.total {
 		c.procBase = cur.baseline()
@@ -92,7 +114,7 @@ func (c *Collector) Processes(sortBy string, limit int) (ProcessList, error) {
 		c.mu.Lock()
 		cur, err = readProcSnapshot()
 		if err != nil {
-			return ProcessList{}, err
+			return nil, time.Time{}, err
 		}
 	}
 	items := assembleProcesses(c.procBase, cur, runtime.NumCPU())
@@ -100,7 +122,7 @@ func (c *Collector) Processes(sortBy string, limit int) (ProcessList, error) {
 	c.hasProc = true
 	c.procCached = items
 	c.procCacheAt = cur.At
-	return finishProcessList(items, sortBy, limit, cur.At), nil
+	return items, cur.At, nil
 }
 
 func finishProcessList(src []Process, sortBy string, limit int, at time.Time) ProcessList {

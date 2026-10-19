@@ -46,6 +46,36 @@ func TestNormalizeResourceAndScript(t *testing.T) {
 	}
 }
 
+func TestNormalizeProcess(t *testing.T) {
+	missing := &Request{Name: "Nginx", Type: model.TypeProcess, Interval: 30, Timeout: 5}
+	if err := missing.Normalize(60, 5); err == nil {
+		t.Fatal("expected process name")
+	}
+	req := &Request{
+		Name: "Nginx", Type: model.TypeProcess, Interval: 30, Timeout: 5,
+		Host: " nginx ", Command: " nginx: master ", Threshold: 80, MemThreshold: 512,
+	}
+	if err := req.Normalize(60, 5); err != nil {
+		t.Fatal(err)
+	}
+	if req.Host != "nginx" || req.Match != model.MatchCommand || req.Threshold != 80 || req.MemThreshold != 512 {
+		t.Fatalf("%+v", req)
+	}
+	var saved model.Monitor
+	req.Apply(&saved)
+	if saved.Type != model.TypeProcess || saved.Match != model.MatchCommand || saved.MemThreshold != 512 || saved.Command != "nginx: master" {
+		t.Fatalf("%+v", saved)
+	}
+	nameOnly := &Request{Name: "Nginx", Type: model.TypeProcess, Interval: 30, Timeout: 5, Host: "nginx", Match: model.MatchName, Threshold: 0}
+	if err := nameOnly.Normalize(60, 5); err != nil || nameOnly.Match != model.MatchName || nameOnly.Threshold != 0 {
+		t.Fatalf("%+v %v", nameOnly, err)
+	}
+	bad := &Request{Name: "Nginx", Type: model.TypeProcess, Interval: 30, Timeout: 5, Host: "nginx", Match: model.MatchCommand}
+	if err := bad.Normalize(60, 5); err == nil {
+		t.Fatal("expected command")
+	}
+}
+
 func TestNormalizeHTTPBody(t *testing.T) {
 	req := &Request{
 		Name: "API", Type: model.TypeHTTP, URL: "https://example.com/hook", Method: "POST",

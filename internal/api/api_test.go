@@ -65,7 +65,7 @@ func newTestServer(t *testing.T) *Server {
 	logs.Bind(db)
 	reg := checker.NewRegistry(
 		checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker(),
-		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(),
+		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(), checker.NewProcessChecker(collector),
 	)
 	alerts := alert.NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
 	alerts.Start(1)
@@ -361,6 +361,42 @@ func TestHostScriptAndLogs(t *testing.T) {
 	rec = do(t, s, http.MethodPost, "/api/scripts/run", token, map[string]any{"command": ""})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("empty script %d", rec.Code)
+	}
+}
+
+func TestProcessMonitorCreate(t *testing.T) {
+	s := newTestServer(t)
+	token := login(t, s)
+	rec := do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "Nginx", "type": "process", "interval": 30, "timeout": 5,
+	})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing process %d %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "Nginx", "type": "process", "host": "nginx", "match": "name",
+		"threshold": 80, "memThreshold": 256,
+		"interval": 30, "timeout": 5, "failureThreshold": 1, "recoveryThreshold": 1,
+	})
+	if rec.Code != 200 || !bytes.Contains(rec.Body.Bytes(), []byte(`"type":"process"`)) || !bytes.Contains(rec.Body.Bytes(), []byte(`"memThreshold":256`)) {
+		t.Fatalf("create %d %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Data model.Monitor `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Data.Match != model.MatchName || created.Data.Threshold != 80 {
+		t.Fatalf("%+v", created.Data)
+	}
+	rec = do(t, s, http.MethodPost, "/api/monitors/"+strconv.FormatUint(uint64(created.Data.ID), 10)+"/check", token, nil)
+	if rec.Code != 200 {
+		t.Fatalf("check %d %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, s, http.MethodGet, "/api/monitors/processes?limit=5", token, nil)
+	if rec.Code != 200 {
+		t.Fatalf("processes %d %s", rec.Code, rec.Body.String())
 	}
 }
 

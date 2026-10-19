@@ -60,7 +60,7 @@ const points = ref([])
 const avail = ref('-')
 const range = ref('24h')
 const message = ref('')
-const resourceLike = computed(() => ['cpu', 'memory', 'disk', 'script'].includes(monitor.value?.type))
+const resourceLike = computed(() => ['cpu', 'memory', 'disk', 'script', 'process'].includes(monitor.value?.type))
 
 async function load() {
   if (isDemo()) {

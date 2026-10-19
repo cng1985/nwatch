@@ -30,7 +30,7 @@ export const statusText = {
   INVALID: '无效',
 }
 
-export const typeText = { http: 'HTTP', tls: '证书', tcp: 'TCP', cpu: 'CPU', memory: '内存', disk: '磁盘', script: '脚本' }
+export const typeText = { http: 'HTTP', tls: '证书', tcp: 'TCP', cpu: 'CPU', memory: '内存', disk: '磁盘', script: '脚本', process: '进程' }
 
 export const eventText = {
   MONITOR_DOWN: '服务异常',
@@ -107,6 +107,11 @@ export function targetOf(row) {
   if (row.type === 'memory') return `内存超过 ${row.threshold || 90}%`
   if (row.type === 'disk') return `${row.host || '/'} 超过 ${row.threshold || 90}%`
   if (row.type === 'script') return (row.command || '').split('\n').map((line) => line.trim()).find(Boolean) || '脚本'
+  if (row.type === 'process') {
+    const name = row.host || '进程'
+    if (row.match === 'command' && row.command) return `${name} · ${row.command}`
+    return name
+  }
   if (row.type === 'http') return row.url || '-'
   if (row.url) return row.url
   if (row.host) return row.port ? `${row.host}:${row.port}` : row.host
@@ -121,6 +126,7 @@ export function iconOf(row) {
   if (type === 'memory') return 'mem'
   if (type === 'disk') return 'disk'
   if (type === 'script') return 'script'
+  if (type === 'process') return 'process'
   if ((row?.url || '').startsWith('https')) return 'lock'
   return 'globe'
 }

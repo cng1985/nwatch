@@ -49,7 +49,7 @@ func TestDownSchedulesNotifyUntilRecovery(t *testing.T) {
 	collector := host.NewCollector()
 	reg := checker.NewRegistry(
 		checker.NewHTTPChecker(), checker.NewTLSChecker(), checker.NewTCPChecker(),
-		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(),
+		checker.NewCPUChecker(collector), checker.NewMemoryChecker(collector), checker.NewDiskChecker(), checker.NewScriptChecker(), checker.NewProcessChecker(collector),
 	)
 	alerts := alert.NewManager(db, notifier.NewRegistry(notifier.NewDingTalk(store), notifier.NewWeCom(store), notifier.NewWebhook()), nil)
 	proc := NewProcessor(db, reg, state.NewEngine(), alerts, metric.NewAggregator(), store, mailer.New(db, store, nil))

@@ -12,6 +12,7 @@ var Module = fx.Module("checker",
 		NewMemoryChecker,
 		NewDiskChecker,
 		NewScriptChecker,
+		NewProcessChecker,
 		NewRegistry,
 	),
 )

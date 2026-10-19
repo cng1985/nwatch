@@ -28,6 +28,12 @@ func Target(m *model.Monitor) string {
 			path = host.DefaultDiskPath()
 		}
 		return fmt.Sprintf("%s %.0f%%", path, thresholdOf(m))
+	case model.TypeProcess:
+		name := strings.TrimSpace(m.Host)
+		if name == "" {
+			return "进程"
+		}
+		return name
 	case model.TypeScript:
 		line := strings.TrimSpace(m.Command)
 		if i := strings.IndexAny(line, "\r\n"); i >= 0 {

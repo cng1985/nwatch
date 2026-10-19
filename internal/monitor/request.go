@@ -25,6 +25,8 @@ type Request struct {
 	Body                string            `json:"body"`
 	BodyType            string            `json:"bodyType"`
 	Threshold           float64           `json:"threshold"`
+	MemThreshold        float64           `json:"memThreshold"`
+	Match               string            `json:"match"`
 	Command             string            `json:"command"`
 	WorkDir             string            `json:"workDir"`
 	Interval            int               `json:"interval"`
@@ -55,9 +57,9 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 		return errors.New("名称过长")
 	}
 	switch r.Type {
-	case model.TypeHTTP, model.TypeTLS, model.TypeTCP, model.TypeCPU, model.TypeMemory, model.TypeDisk, model.TypeScript:
+	case model.TypeHTTP, model.TypeTLS, model.TypeTCP, model.TypeCPU, model.TypeMemory, model.TypeDisk, model.TypeScript, model.TypeProcess:
 	default:
-		return errors.New("监控类型仅支持 http、tls、tcp、cpu、memory、disk、script")
+		return errors.New("监控类型仅支持 http、tls、tcp、cpu、memory、disk、script、process")
 	}
 	if r.Interval <= 0 {
 		r.Interval = defaultsInterval
@@ -177,9 +179,17 @@ func (r *Request) Normalize(defaultsInterval, defaultsTimeout int) error {
 		if r.WorkDir != "" && !filepath.IsAbs(r.WorkDir) {
 			return errors.New("工作目录需要是绝对路径")
 		}
+	case model.TypeProcess:
+		if err := r.normalizeProcess(); err != nil {
+			return err
+		}
 	}
 	if r.Type != model.TypeHTTP {
 		r.BodyType = ""
+	}
+	if r.Type != model.TypeProcess {
+		r.MemThreshold = 0
+		r.Match = ""
 	}
 	if r.Enabled == nil {
 		t := true
@@ -204,6 +214,8 @@ func (r *Request) Apply(m *model.Monitor) {
 	m.Body = r.Body
 	m.BodyType = r.BodyType
 	m.Threshold = r.Threshold
+	m.MemThreshold = r.MemThreshold
+	m.Match = r.Match
 	m.Command = r.Command
 	m.WorkDir = r.WorkDir
 	m.Interval = r.Interval
@@ -222,6 +234,46 @@ func (r *Request) Apply(m *model.Monitor) {
 	if r.Enabled != nil {
 		m.Enabled = *r.Enabled
 	}
+}
+
+func (r *Request) normalizeProcess() error {
+	r.Host = strings.TrimSpace(r.Host)
+	r.Command = strings.TrimSpace(r.Command)
+	r.Match = strings.ToLower(strings.TrimSpace(r.Match))
+	if r.Host == "" {
+		return errors.New("请选择要监控的进程")
+	}
+	if len(r.Host) > 128 || strings.ContainsRune(r.Host, 0) || strings.ContainsAny(r.Host, "\r\n") {
+		return errors.New("进程名不合法")
+	}
+	if len(r.Command) > 1024 || strings.ContainsRune(r.Command, 0) {
+		return errors.New("命令行不合法")
+	}
+	switch r.Match {
+	case "":
+		if r.Command != "" {
+			r.Match = model.MatchCommand
+		} else {
+			r.Match = model.MatchName
+		}
+	case model.MatchName, model.MatchCommand:
+	default:
+		return errors.New("进程匹配方式仅支持按进程名或按命令行")
+	}
+	if r.Match == model.MatchCommand && r.Command == "" {
+		return errors.New("按命令行匹配时需要填写命令")
+	}
+	if r.Threshold < 0 || r.Threshold > 10000 {
+		return errors.New("CPU 阈值需在 0 到 10000 之间")
+	}
+	if r.MemThreshold < 0 || r.MemThreshold > 1024*1024 {
+		return errors.New("内存阈值需在 0 到 1048576 MB 之间")
+	}
+	r.Port = 0
+	r.Method = ""
+	r.URL = ""
+	r.WorkDir = ""
+	return nil
 }
 
 func (r *Request) normalizeThreshold() error {

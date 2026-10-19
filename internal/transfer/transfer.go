@@ -42,6 +42,11 @@ type MonitorItem struct {
 	Headers             map[string]string `json:"headers,omitempty"`
 	Body                string            `json:"body,omitempty"`
 	BodyType            string            `json:"bodyType,omitempty"`
+	Threshold           float64           `json:"threshold,omitempty"`
+	MemThreshold        float64           `json:"memThreshold,omitempty"`
+	Match               string            `json:"match,omitempty"`
+	Command             string            `json:"command,omitempty"`
+	WorkDir             string            `json:"workDir,omitempty"`
 	Interval            int               `json:"interval"`
 	Timeout             int               `json:"timeout"`
 	Enabled             bool              `json:"enabled"`
@@ -105,7 +110,9 @@ func Export(db *gorm.DB, includeSecrets bool) (Bundle, error) {
 	for _, m := range monitors {
 		item := MonitorItem{
 			Name: m.Name, Type: m.Type, URL: m.URL, Host: m.Host, Port: m.Port, Method: m.Method,
-			Headers: m.Headers, Body: m.Body, BodyType: m.BodyType, Interval: m.Interval, Timeout: m.Timeout, Enabled: m.Enabled,
+			Headers: m.Headers, Body: m.Body, BodyType: m.BodyType,
+			Threshold: m.Threshold, MemThreshold: m.MemThreshold, Match: m.Match, Command: m.Command, WorkDir: m.WorkDir,
+			Interval: m.Interval, Timeout: m.Timeout, Enabled: m.Enabled,
 			FailureThreshold: m.FailureThreshold, RecoveryThreshold: m.RecoveryThreshold,
 			ExpectedStatusCodes: m.ExpectedStatusCodes, BodyContains: m.BodyContains, BodyNotContains: m.BodyNotContains,
 			FollowRedirects: m.FollowRedirects, TLSWarningDays: m.TLSWarningDays, TLSCriticalDays: m.TLSCriticalDays,
@@ -215,6 +222,11 @@ func Import(db *gorm.DB, b Bundle) error {
 			row.SyncHeaders()
 			row.Body = item.Body
 			row.BodyType = item.BodyType
+			row.Threshold = item.Threshold
+			row.MemThreshold = item.MemThreshold
+			row.Match = item.Match
+			row.Command = item.Command
+			row.WorkDir = item.WorkDir
 			row.Interval = item.Interval
 			row.Timeout = item.Timeout
 			row.Enabled = item.Enabled
