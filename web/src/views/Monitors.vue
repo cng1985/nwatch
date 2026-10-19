@@ -6,7 +6,7 @@
     </div>
     <div class="toolbar">
       <input v-model="query.keyword" class="search" placeholder="搜索名称或地址" @keyup.enter="load" />
-      <select v-model="query.type" class="select" @change="load"><option value="">全部类型</option><option value="http">HTTP</option><option value="tls">证书</option><option value="tcp">TCP</option><option value="cpu">CPU</option><option value="memory">内存</option><option value="disk">磁盘</option><option value="script">脚本</option></select>
+      <select v-model="query.type" class="select" @change="load"><option value="">全部类型</option><option value="http">HTTP</option><option value="tls">证书</option><option value="tcp">TCP</option><option value="cpu">CPU</option><option value="memory">内存</option><option value="disk">磁盘</option><option value="script">脚本</option><option value="process">进程</option></select>
       <select v-model="query.status" class="select" @change="load"><option value="">全部状态</option><option value="UP">正常运行</option><option value="DOWN">服务异常</option><option value="PAUSED">已暂停</option><option value="UNKNOWN">等待检测</option></select>
       <button class="btn ghost" @click="load">查询</button>
       <div class="seg view-switch" role="group" aria-label="显示方式">
@@ -99,7 +99,7 @@ const total = ref(0)
 const page = ref(1)
 const view = ref(localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list')
 const query = reactive({ keyword: '', type: '', status: '' })
-const resourceTypes = ['cpu', 'memory', 'disk', 'script']
+const resourceTypes = ['cpu', 'memory', 'disk', 'script', 'process']
 
 function setView(next) {
   view.value = next

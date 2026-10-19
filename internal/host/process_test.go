@@ -105,6 +105,10 @@ func TestProcessesReadsLocal(t *testing.T) {
 	if !mem.SampledAt.Equal(list.SampledAt) {
 		t.Fatalf("sort should reuse the sample, cpu=%s memory=%s", list.SampledAt, mem.SampledAt)
 	}
+	all, err := c.AllProcesses()
+	if err != nil || len(all) != list.Total {
+		t.Fatalf("all=%d total=%d err=%v", len(all), list.Total, err)
+	}
 }
 
 func TestParseProcStatMatchesLive(t *testing.T) {

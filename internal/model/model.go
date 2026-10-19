@@ -8,13 +8,18 @@ import (
 )
 
 const (
-	TypeHTTP   = "http"
-	TypeTLS    = "tls"
-	TypeTCP    = "tcp"
-	TypeCPU    = "cpu"
-	TypeMemory = "memory"
-	TypeDisk   = "disk"
-	TypeScript = "script"
+	TypeHTTP    = "http"
+	TypeTLS     = "tls"
+	TypeTCP     = "tcp"
+	TypeCPU     = "cpu"
+	TypeMemory  = "memory"
+	TypeDisk    = "disk"
+	TypeScript  = "script"
+	TypeProcess = "process"
+
+	// MatchName 只按进程名匹配。MatchCommand 还要求命令行包含所选命令。
+	MatchName    = "name"
+	MatchCommand = "command"
 
 	StatusUnknown = "UNKNOWN"
 	StatusUp      = "UP"
@@ -70,9 +75,14 @@ type Monitor struct {
 	Body       string            `gorm:"type:text" json:"body"`
 	BodyType   string            `gorm:"size:16" json:"bodyType"`
 	// Threshold 是 CPU、内存、磁盘使用率告警线，单位是百分比。
+	// 进程监控里它是 CPU 占用阈值，0 表示不按 CPU 告警。进程 CPU 按单个核心计算，可以超过 100。
 	Threshold float64 `json:"threshold"`
-	Command   string  `gorm:"type:text" json:"command"`
-	WorkDir   string  `gorm:"size:1024" json:"workDir"`
+	// MemThreshold 是进程内存占用告警线，单位 MB。0 表示不按内存告警。
+	MemThreshold float64 `json:"memThreshold"`
+	// Match 是进程匹配方式：name 只按进程名，command 还要求命令行包含所选命令。
+	Match   string `gorm:"size:16" json:"match"`
+	Command string `gorm:"type:text" json:"command"`
+	WorkDir string `gorm:"size:1024" json:"workDir"`
 
 	Interval int    `gorm:"not null" json:"interval"`
 	Timeout  int    `gorm:"not null" json:"timeout"`

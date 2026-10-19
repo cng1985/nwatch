@@ -27,6 +27,7 @@
     <path v-else-if="name === 'mem'" d="M5 7h14v10H5zM8 7v10M12 7v10M16 7v10" />
     <path v-else-if="name === 'disk'" d="M4 7h16v10H4zM4 12h16M8 15h2" />
     <path v-else-if="name === 'script'" d="M5 4h14v16H5zM8 8l3 3-3 3M13 15h3" />
+    <path v-else-if="name === 'process'" d="M8 3h8v4H8zM5 10h14v4H5zM8 17h8v4H8z" />
     <path v-else-if="name === 'terminal'" d="M4 6h16v12H4zM7 10l3 2-3 2M12 14h5" />
     <path v-else-if="name === 'clock'" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v6l4 2" />
     <path v-else-if="name === 'service'" d="M4 5h16v5H4zM4 14h16v5H4zM7 7.5h.01M7 16.5h.01" />

@@ -49,6 +49,7 @@
             <th><button class="sort-th" :class="{ on: procSort === 'cpu' }" @click="setSort('cpu')">CPU{{ procSort === 'cpu' ? ' ↓' : '' }}</button></th>
             <th><button class="sort-th" :class="{ on: procSort === 'memory' }" @click="setSort('memory')">内存{{ procSort === 'memory' ? ' ↓' : '' }}</button></th>
             <th>状态</th>
+            <th v-if="can('monitor.write')"></th>
           </tr>
         </thead>
         <tbody>
@@ -67,8 +68,9 @@
               <span class="pct">{{ bytes(row.memBytes) }} · {{ Number(row.memPercent || 0).toFixed(1) }}%</span>
             </td>
             <td>{{ row.stateText || row.state || '-' }}</td>
+            <td v-if="can('monitor.write')" class="actions-inline"><router-link class="link" :to="monitorLink(row)">监控</router-link></td>
           </tr>
-          <tr v-if="!processes.length"><td colspan="6" class="empty">{{ procError || (procLoaded ? '没有读到进程' : '读取中') }}</td></tr>
+          <tr v-if="!processes.length"><td :colspan="can('monitor.write') ? 7 : 6" class="empty">{{ procError || (procLoaded ? '没有读到进程' : '读取中') }}</td></tr>
         </tbody>
       </table>
     </div>
@@ -95,7 +97,7 @@
         </tbody>
       </table>
     </div>
-    <p class="demo-note">需要告警时，到监控列表新增 CPU、内存或磁盘监控，超过阈值后走现有通知渠道。</p>
+    <p class="demo-note">需要告警时，到监控列表新增 CPU、内存、磁盘或进程监控。进程停止，或 CPU、内存超过阈值后，走现有通知渠道。</p>
   </div>
 </template>
 
@@ -105,6 +107,7 @@ import Icon from '../components/Icon.vue'
 import UsageChart from '../components/UsageChart.vue'
 import { api } from '../api'
 import { bytes, duration, isDemo } from '../format'
+import { can } from '../session'
 
 const ranges = [{ id: '1h', label: '1 小时' }, { id: '6h', label: '6 小时' }, { id: '24h', label: '24 小时' }, { id: '7d', label: '7 天' }]
 const range = ref('1h')
@@ -137,6 +140,9 @@ const procSummary = computed(() => {
   if (!shown && !procLoaded.value) return '正在读取本机进程。'
   return `共 ${total} 个，按 ${by} 从高到低显示 ${shown} 个。CPU 按单个核心计算，可以超过 100%。`
 })
+function monitorLink(row) {
+  return { path: '/monitors/new', query: { type: 'process', name: row.name || '', command: row.command || '' } }
+}
 function tone(value) {
   if (value >= 90) return 'bad'
   if (value >= 70) return 'warn'

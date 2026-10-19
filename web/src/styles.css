@@ -240,6 +240,15 @@ th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; p
 .sort-th { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
 .sort-th.on { color: var(--text); }
 .proc-cmd { max-width: 520px; }
+.proc-picker { display: flex; flex-direction: column; gap: 10px; }
+.proc-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #b7ebcf; background: #f3fbf7; border-radius: 10px; }
+.proc-selected b, .proc-selected small { display: block; }
+.proc-selected small { color: var(--muted); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 560px; }
+.proc-tools { display: flex; align-items: center; gap: 8px; }
+.proc-tools .search { flex: 1; min-width: 0; }
+.proc-scroll { max-height: 320px; overflow: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.proc-scroll tbody tr { cursor: pointer; }
+.proc-scroll tbody tr:hover, .proc-scroll tbody tr.on { background: #f3fbf7; }
 .proc-cmd b, .proc-cmd small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proc-cmd small { color: var(--muted); font-size: 12px; margin-top: 2px; font-weight: 450; }
 td { padding: 14px 16px; border-bottom: 1px solid #f1f4f7; font-size: 14px; vertical-align: middle; }
@@ -316,7 +325,7 @@ textarea.text { height: auto; padding: 10px 12px; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
 .form-grid .full { grid-column: 1 / -1; }
 .req::after { content: " *"; color: var(--red); }
-.types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; }
 .type-card {
   border: 1px solid var(--line); background: white; border-radius: 12px; min-height: 92px;
   display: grid; place-items: center; gap: 8px; color: #3d4d58; position: relative;
