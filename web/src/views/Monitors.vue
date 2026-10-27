@@ -1,9 +1,18 @@
 <template>
   <div>
     <div class="page-head">
-      <div><h1>监控列表</h1><p>按状态查看全部监控，异常会排在最上方。</p></div>
-      <router-link v-if="can('monitor.write')" class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
+      <div><h1>监控列表</h1><p>按状态查看全部监控，异常会排在最上方。可以导出 Excel，改完再导入。</p></div>
+      <div class="head-actions">
+        <button class="btn ghost" type="button" :disabled="exporting" @click="exportExcel"><Icon name="download" /> 导出</button>
+        <button v-if="can('monitor.write')" class="btn ghost" type="button" :disabled="importing" @click="fileRef.click()"><Icon name="upload" /> 导入</button>
+        <button class="btn ghost" type="button" :disabled="exporting" @click="downloadTemplate">下载模板</button>
+        <router-link v-if="can('monitor.write')" class="btn primary" to="/monitors/new"><Icon name="plus" style="width:16px;height:16px" /> 新增监控</router-link>
+      </div>
     </div>
+    <p class="demo-note">导入按编号更新已有监控；编号留空时按名称新建或更新。不会删除表格里没有的监控。从其他环境导入时，请先清空编号列。</p>
+    <p v-if="notice" class="demo-note ok-note">{{ notice }}</p>
+    <p v-if="error" class="error">{{ error }}</p>
+    <input ref="fileRef" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="importExcel" />
     <div class="toolbar">
       <input v-model="query.keyword" class="search" placeholder="搜索名称或地址" @keyup.enter="load" />
       <select v-model="query.type" class="select" @change="load"><option value="">全部类型</option><option value="http">HTTP</option><option value="tls">证书</option><option value="tcp">TCP</option><option value="cpu">CPU</option><option value="memory">内存</option><option value="disk">磁盘</option><option value="script">脚本</option><option value="process">进程</option></select>
@@ -88,7 +97,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
-import { api } from '../api'
+import { api, download } from '../api'
 import { can } from '../session'
 import { presentDemo } from '../demo'
 import { iconOf, isDemo, relative, statusLabel, targetOf, typeText } from '../format'
@@ -99,6 +108,11 @@ const total = ref(0)
 const page = ref(1)
 const view = ref(localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list')
 const query = reactive({ keyword: '', type: '', status: '' })
+const fileRef = ref()
+const exporting = ref(false)
+const importing = ref(false)
+const notice = ref('')
+const error = ref('')
 const resourceTypes = ['cpu', 'memory', 'disk', 'script', 'process']
 
 function setView(next) {
@@ -139,6 +153,69 @@ async function remove(row) {
   if (isDemo() || !confirm('删除监控「' + row.name + '」？')) return
   await api('/api/monitors/' + row.id, { method: 'DELETE' })
   await load()
+}
+function filterQuery() {
+  const params = new URLSearchParams()
+  for (const key of ['keyword', 'type', 'status']) if (query[key]) params.set(key, query[key])
+  const qs = params.toString()
+  return qs ? '?' + qs : ''
+}
+function datedName() {
+  const now = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `nmonitor-monitors-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}.xlsx`
+}
+async function exportExcel() {
+  notice.value = ''
+  error.value = ''
+  if (isDemo()) { notice.value = '演示模式不会下载文件'; return }
+  exporting.value = true
+  try {
+    await download('/api/monitors/export' + filterQuery(), datedName())
+    notice.value = '已导出当前筛选结果'
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    exporting.value = false
+  }
+}
+async function downloadTemplate() {
+  notice.value = ''
+  error.value = ''
+  if (isDemo()) { notice.value = '演示模式不会下载文件'; return }
+  exporting.value = true
+  try {
+    await download('/api/monitors/export?template=1', 'nmonitor-monitors-template.xlsx')
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    exporting.value = false
+  }
+}
+async function importExcel(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  notice.value = ''
+  error.value = ''
+  if (!file) return
+  if (isDemo()) { notice.value = '演示模式不会写入服务器'; return }
+  if (!confirm('按表格新建或更新监控？不会删除表格里没有的监控。从其他环境导入时，请先清空编号列。')) return
+  const body = new FormData()
+  body.append('file', file)
+  importing.value = true
+  try {
+    const data = await api('/api/monitors/import', { method: 'POST', body })
+    const totalRows = data.total || 0
+    notice.value = totalRows
+      ? `已导入 ${totalRows} 条：新建 ${data.created || 0}，更新 ${data.updated || 0}`
+      : '表格里没有可导入的监控'
+    page.value = 1
+    await load()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    importing.value = false
+  }
 }
 onMounted(load)
 </script>
