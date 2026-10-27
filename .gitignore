@@ -1,5 +1,6 @@
 nmonitor
 *.exe
+dist/
 data/*.db
 data/*.db-*
 data/backups/

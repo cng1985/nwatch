@@ -77,9 +77,37 @@ web/                      Vue 3 管理台
   src/api.js              接口调用
   src/router.js           路由和登录拦截
 deploy/                   systemd 单元和安装脚本
+scripts/build.sh          Linux 构建脚本
+scripts/build.cmd         Windows cmd 构建脚本
 config.yaml               默认配置
 Dockerfile
 Makefile
+```
+
+## 构建
+
+需要本机已安装 Go 和 Node.js。脚本会先构建前端，写入 `internal/web/dist` 并嵌入二进制，再把可执行文件和 `config.yaml` 放到 `dist/<系统>-<架构>/`。
+
+在 Linux 上：
+
+```bash
+./scripts/build.sh            # 当前架构的 Linux 程序
+./scripts/build.sh windows    # 交叉编译 Windows 程序
+./scripts/build.sh all        # Linux 和 Windows 都构建
+```
+
+在 Windows cmd 中：
+
+```bat
+scripts\build.cmd
+scripts\build.cmd linux
+scripts\build.cmd all
+```
+
+也可以继续用 Makefile，产物是当前目录下的 `nmonitor`：
+
+```bash
+make build
 ```
 
 ## 运行
