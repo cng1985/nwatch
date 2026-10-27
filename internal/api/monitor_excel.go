@@ -60,28 +60,9 @@ func (s *Server) exportMonitors(c *gin.Context) {
 }
 
 func (s *Server) importMonitors(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil {
-		fail(c, http.StatusBadRequest, "请选择 xlsx 文件")
-		return
-	}
-	if file.Size > maxMonitorExcel {
-		fail(c, http.StatusBadRequest, "文件不能超过 8MB")
-		return
-	}
-	src, err := file.Open()
-	if err != nil {
-		fail(c, http.StatusBadRequest, "请选择 xlsx 文件")
-		return
-	}
-	defer src.Close()
-	data, err := io.ReadAll(io.LimitReader(src, maxMonitorExcel+1))
-	if err != nil {
-		fail(c, http.StatusBadRequest, "无法读取文件")
-		return
-	}
-	if len(data) > maxMonitorExcel {
-		fail(c, http.StatusBadRequest, "文件不能超过 8MB")
+	data, code, msg := readExcelUpload(c)
+	if code != 0 {
+		fail(c, code, msg)
 		return
 	}
 	snap := s.settings.Snapshot()
@@ -96,6 +77,29 @@ func (s *Server) importMonitors(c *gin.Context) {
 		return
 	}
 	ok(c, stats)
+}
+
+func readExcelUpload(c *gin.Context) ([]byte, int, string) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return nil, http.StatusBadRequest, "请选择 xlsx 文件"
+	}
+	if file.Size > maxMonitorExcel {
+		return nil, http.StatusBadRequest, "文件不能超过 8MB"
+	}
+	src, err := file.Open()
+	if err != nil {
+		return nil, http.StatusBadRequest, "请选择 xlsx 文件"
+	}
+	defer src.Close()
+	data, err := io.ReadAll(io.LimitReader(src, maxMonitorExcel+1))
+	if err != nil {
+		return nil, http.StatusBadRequest, "无法读取文件"
+	}
+	if len(data) > maxMonitorExcel {
+		return nil, http.StatusBadRequest, "文件不能超过 8MB"
+	}
+	return data, 0, ""
 }
 
 func excelClientError(err error) (string, bool) {

@@ -171,6 +171,8 @@ docker run --rm -p 8080:8080 \
 GET/POST        /api/monitors
 GET             /api/monitors/export
 POST            /api/monitors/import
+GET             /api/monitors/requests/export
+POST            /api/monitors/requests/import
 GET/PUT/DELETE  /api/monitors/:id
 POST            /api/monitors/:id/check
 POST            /api/monitors/:id/enable
@@ -281,6 +283,20 @@ GET/PUT/DELETE  /api/access/users/:id
 - 导出的表格里有「说明」页，列出每一列怎么填
 
 `GET /api/monitors/export` 下载 xlsx，加上 `template=1` 只下载表头。`POST /api/monitors/import` 使用 multipart 字段 `file`。
+
+## 网络请求导入导出
+
+监控列表可以单独导出、导入网络请求。表格只有四列：名称、分组、类型、地址。
+
+- 只包含 HTTP/HTTPS 监控。导出时带上当前搜索词和状态
+- 类型填 `http` 或 `https`。地址没写协议时按类型补上；两边不一致时以类型为准
+- 按名称更新。没有同名监控就新建，使用默认检测间隔，请求方法为 GET
+- 更新时不改检测间隔、超时、请求方法、请求头、请求体和通知渠道
+- 分组不存在时自动创建，留空表示不分组。不会删除表格里没有的监控
+- 同名监控有多条，或同名的不是网络请求时，整次导入不会写入
+- 带编号、请求方法等列的完整监控表请走上面的监控导入
+
+`GET /api/monitors/requests/export` 下载 xlsx，加上 `template=1` 只下载表头。`POST /api/monitors/requests/import` 使用 multipart 字段 `file`。
 
 ## 用户与角色
 
