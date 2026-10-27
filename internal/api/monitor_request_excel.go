@@ -22,6 +22,9 @@ func (s *Server) requestQuery(c *gin.Context) *gorm.DB {
 	if st := strings.TrimSpace(c.Query("status")); st != "" {
 		q = q.Where("status = ?", st)
 	}
+	if gid := strings.TrimSpace(c.Query("groupId")); gid != "" {
+		q = q.Where("group_id = ?", gid)
+	}
 	return q
 }
 

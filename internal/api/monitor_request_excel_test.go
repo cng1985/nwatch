@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -90,6 +91,38 @@ func TestRequestExcelImportExport(t *testing.T) {
 	}
 	if got.Method != "POST" || got.BodyType != "json" || got.Interval != 30 || got.Headers["X-Trace"] != "1" {
 		t.Fatalf("其他字段被改掉 %+v headers=%v", got, got.Headers)
+	}
+
+	rec = do(t, s, http.MethodPost, "/api/monitors", token, map[string]any{
+		"name": "其他站点", "type": "http", "url": "https://other.example.com",
+		"interval": 30, "timeout": 5,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("other %d %s", rec.Code, rec.Body.String())
+	}
+	groupURL := "/api/monitors?groupId=" + strconv.FormatUint(uint64(got.Group.ID), 10)
+	rec = do(t, s, http.MethodGet, groupURL, token, nil)
+	if rec.Code != 200 {
+		t.Fatalf("group list %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Data.Items) != 1 || listed.Data.Items[0].Name != "官网" {
+		t.Fatalf("分组筛选 %+v", listed.Data.Items)
+	}
+	rec = do(t, s, http.MethodGet, "/api/monitors/requests/export?groupId="+strconv.FormatUint(uint64(got.Group.ID), 10), token, nil)
+	if rec.Code != 200 {
+		t.Fatalf("group export %d %s", rec.Code, rec.Body.String())
+	}
+	grouped, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer grouped.Close()
+	groupRows, err := grouped.GetRows("网络请求")
+	if err != nil || len(groupRows) != 2 || groupRows[1][0] != "官网" {
+		t.Fatalf("分组导出 %#v %v", groupRows, err)
 	}
 
 	rec = do(t, s, http.MethodGet, "/api/monitors/requests/export?template=1", token, nil)
