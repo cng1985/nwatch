@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="monitor-page">
     <div class="page-head">
       <div><h1>监控列表</h1><p>按状态查看全部监控，异常会排在最上方。可以导出完整 Excel，也可以只按名称、分组、类型、地址导入导出网络请求。</p></div>
       <div class="head-actions">
@@ -19,37 +19,53 @@
     <input ref="fileRef" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="importExcel" />
     <input ref="requestFileRef" hidden type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" @change="importRequests" />
     <div class="toolbar">
-      <input v-model="query.keyword" class="search" placeholder="搜索名称或地址" @keyup.enter="load" />
-      <select v-model="query.type" class="select" @change="load"><option value="">全部类型</option><option value="http">HTTP</option><option value="tls">证书</option><option value="tcp">TCP</option><option value="cpu">CPU</option><option value="memory">内存</option><option value="disk">磁盘</option><option value="script">脚本</option><option value="process">进程</option></select>
-      <select v-model="query.status" class="select" @change="load"><option value="">全部状态</option><option value="UP">正常运行</option><option value="DOWN">服务异常</option><option value="PAUSED">已暂停</option><option value="UNKNOWN">等待检测</option></select>
-      <button class="btn ghost" @click="load">查询</button>
+      <input v-model="query.keyword" class="search" placeholder="搜索名称或地址" @keyup.enter="search" />
+      <select v-model="query.type" class="select" @change="search"><option value="">全部类型</option><option value="http">HTTP</option><option value="tls">证书</option><option value="tcp">TCP</option><option value="cpu">CPU</option><option value="memory">内存</option><option value="disk">磁盘</option><option value="script">脚本</option><option value="process">进程</option></select>
+      <select v-model="query.status" class="select" @change="search"><option value="">全部状态</option><option value="UP">正常运行</option><option value="DOWN">服务异常</option><option value="PAUSED">已暂停</option><option value="UNKNOWN">等待检测</option></select>
+      <select v-if="can('group.read')" v-model="query.groupId" class="select" @change="search">
+        <option value="">全部分组</option>
+        <option v-for="g in groups" :key="g.id" :value="String(g.id)">{{ g.name }}</option>
+      </select>
+      <button class="btn ghost" @click="search">查询</button>
       <div class="seg view-switch" role="group" aria-label="显示方式">
         <button type="button" :class="{ on: view === 'list' }" :aria-pressed="view === 'list'" @click="setView('list')"><Icon name="list" /> 列表</button>
         <button type="button" :class="{ on: view === 'card' }" :aria-pressed="view === 'card'" @click="setView('card')"><Icon name="grid" /> 卡片</button>
       </div>
     </div>
 
-    <div v-if="view === 'list'" class="card table-wrap">
-      <table>
-        <thead><tr><th>监控名称</th><th>状态</th><th>响应时间</th><th>24h 可用率</th><th>最近检测</th><th>操作</th></tr></thead>
-        <tbody>
-          <tr v-for="row in items" :key="row.id">
-            <td><router-link class="name-cell" :to="'/monitors/' + row.id"><span class="name-ico"><Icon :name="iconOf(row)" /></span><span><b>{{ row.name }}</b><small>{{ targetOf(row) }}</small></span></router-link></td>
-            <td><span class="status" :class="row.status"><i class="mark" :class="markOf(row.status)"></i>{{ statusLabel(row.status) }}</span></td>
-            <td>{{ resultText(row) }}</td>
-            <td><span class="bar" :class="{ bad: row.status === 'DOWN' }"><i :style="{ width: (row.hasAvailability ? row.availability24h : 0) + '%' }"></i></span><span class="pct">{{ availabilityText(row) }}</span></td>
-            <td>{{ relative(row.lastCheckAt) }}</td>
-            <td class="actions-inline">
-              <template v-if="can('monitor.write')">
-                <button @click="check(row)">检测</button>
-                <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
-                <button class="danger" @click="remove(row)">删除</button>
-              </template>
-            </td>
-          </tr>
-          <tr v-if="!items.length"><td colspan="6" class="empty">还没有监控</td></tr>
-        </tbody>
-      </table>
+    <div v-if="view === 'list'" class="card monitor-board">
+      <div class="monitor-scroll">
+        <table class="monitor-fit">
+          <colgroup>
+            <col class="col-name" />
+            <col class="col-group" />
+            <col class="col-status" />
+            <col class="col-result" />
+            <col class="col-avail" />
+            <col class="col-time" />
+            <col class="col-actions" />
+          </colgroup>
+          <thead><tr><th>监控名称</th><th>分组</th><th>状态</th><th>响应时间</th><th>24h 可用率</th><th>最近检测</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="row in items" :key="row.id">
+              <td><router-link class="name-cell" :to="'/monitors/' + row.id"><span class="name-ico"><Icon :name="iconOf(row)" /></span><span><b :title="row.name">{{ row.name }}</b><small :title="targetOf(row)">{{ targetOf(row) }}</small></span></router-link></td>
+              <td :title="groupName(row)">{{ groupName(row) }}</td>
+              <td><span class="status" :class="row.status"><i class="mark" :class="markOf(row.status)"></i>{{ statusLabel(row.status) }}</span></td>
+              <td :title="resultText(row)">{{ resultText(row) }}</td>
+              <td><span class="bar" :class="{ bad: row.status === 'DOWN' }"><i :style="{ width: (row.hasAvailability ? row.availability24h : 0) + '%' }"></i></span><span class="pct">{{ availabilityText(row) }}</span></td>
+              <td>{{ relative(row.lastCheckAt) }}</td>
+              <td class="actions-inline">
+                <template v-if="can('monitor.write')">
+                  <button @click="check(row)">检测</button>
+                  <router-link class="link" :to="'/monitors/' + row.id + '/edit'">编辑</router-link>
+                  <button class="danger" @click="remove(row)">删除</button>
+                </template>
+              </td>
+            </tr>
+            <tr v-if="!items.length"><td colspan="7" class="empty">还没有监控</td></tr>
+          </tbody>
+        </table>
+      </div>
       <div class="pager">
         <button class="btn ghost" :disabled="page === 1" @click="page--; load()">上一页</button>
         <span class="demo-note">{{ total }} 项</span>
@@ -57,7 +73,8 @@
       </div>
     </div>
 
-    <div v-else>
+    <div v-else class="monitor-board">
+      <div class="monitor-scroll">
       <div v-if="items.length" class="monitor-grid">
         <article v-for="row in items" :key="row.id" class="card monitor-card" :class="row.status">
           <router-link class="monitor-card-head" :to="'/monitors/' + row.id">
@@ -78,7 +95,7 @@
             </div>
           </div>
           <div class="monitor-card-foot">
-            <span class="monitor-type">{{ typeText[row.type] || row.type || '监控' }}<template v-if="row.group?.name"> · {{ row.group.name }}</template></span>
+            <span class="monitor-type">{{ typeText[row.type] || row.type || '监控' }} · {{ groupName(row) }}</span>
             <div class="actions-inline">
               <template v-if="can('monitor.write')">
                 <button @click="check(row)">检测</button>
@@ -90,6 +107,7 @@
         </article>
       </div>
       <div v-else class="card empty">还没有监控</div>
+      </div>
       <div class="pager monitor-pager">
         <button class="btn ghost" :disabled="page === 1" @click="page--; load()">上一页</button>
         <span class="demo-note">{{ total }} 项</span>
@@ -104,7 +122,7 @@ import { onMounted, reactive, ref } from 'vue'
 import Icon from '../components/Icon.vue'
 import { api, download } from '../api'
 import { can } from '../session'
-import { presentDemo } from '../demo'
+import { demoGroups, presentDemo } from '../demo'
 import { iconOf, isDemo, relative, statusLabel, targetOf, typeText } from '../format'
 
 const VIEW_KEY = 'nmonitor_monitors_view'
@@ -112,7 +130,8 @@ const items = ref([])
 const total = ref(0)
 const page = ref(1)
 const view = ref(localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list')
-const query = reactive({ keyword: '', type: '', status: '' })
+const query = reactive({ keyword: '', type: '', status: '', groupId: '' })
+const groups = ref([])
 const fileRef = ref()
 const requestFileRef = ref()
 const exporting = ref(false)
@@ -137,18 +156,48 @@ function resultText(row) {
 function availabilityText(row) {
   return row.hasAvailability ? Number(row.availability24h).toFixed(2) + '%' : '-'
 }
+function groupName(row) {
+  if (row.group?.name) return row.group.name
+  const found = groups.value.find((item) => String(item.id) === String(row.groupId || ''))
+  return found?.name || '未分组'
+}
+function search() {
+  page.value = 1
+  return load()
+}
 
 async function load() {
   if (isDemo()) {
-    items.value = presentDemo().overview
-    total.value = items.value.length
+    let list = presentDemo().overview
+    const keyword = query.keyword.trim().toLowerCase()
+    if (keyword) list = list.filter((row) => (row.name + ' ' + targetOf(row)).toLowerCase().includes(keyword))
+    if (query.type) list = list.filter((row) => row.type === query.type)
+    if (query.status) list = list.filter((row) => row.status === query.status)
+    if (query.groupId) list = list.filter((row) => String(row.groupId || '') === query.groupId)
+    items.value = list
+    total.value = list.length
     return
   }
   const params = new URLSearchParams({ page: String(page.value), pageSize: '20' })
-  for (const key of ['keyword', 'type', 'status']) if (query[key]) params.set(key, query[key])
+  for (const key of ['keyword', 'type', 'status', 'groupId']) if (query[key]) params.set(key, query[key])
   const data = await api('/api/monitors?' + params.toString())
   items.value = data.items || []
   total.value = data.total || 0
+}
+async function loadGroups() {
+  if (isDemo()) {
+    groups.value = demoGroups
+    return
+  }
+  if (!can('group.read')) {
+    groups.value = []
+    return
+  }
+  try {
+    groups.value = await api('/api/groups') || []
+  } catch {
+    groups.value = []
+  }
 }
 async function check(row) {
   if (isDemo()) return
@@ -162,7 +211,7 @@ async function remove(row) {
 }
 function filterQuery() {
   const params = new URLSearchParams()
-  for (const key of ['keyword', 'type', 'status']) if (query[key]) params.set(key, query[key])
+  for (const key of ['keyword', 'type', 'status', 'groupId']) if (query[key]) params.set(key, query[key])
   const qs = params.toString()
   return qs ? '?' + qs : ''
 }
@@ -173,7 +222,7 @@ function datedName(prefix) {
 }
 function requestFilterQuery() {
   const params = new URLSearchParams()
-  for (const key of ['keyword', 'status']) if (query[key]) params.set(key, query[key])
+  for (const key of ['keyword', 'status', 'groupId']) if (query[key]) params.set(key, query[key])
   const qs = params.toString()
   return qs ? '?' + qs : ''
 }
@@ -281,5 +330,5 @@ async function importExcel(event) {
     importing.value = false
   }
 }
-onMounted(load)
+onMounted(() => { loadGroups(); load() })
 </script>
