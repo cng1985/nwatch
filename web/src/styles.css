@@ -191,11 +191,12 @@ h1, h2, h3, p { margin: 0; }
   border-radius: 99px; font-style: normal; font-size: 10px; min-width: 14px; text-align: center;
 }
 .content { padding: 6px 28px 36px; }
-.page-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
+.page-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
 .page-head h1 { font-size: 28px; letter-spacing: -0.03em; }
 .page-head h2 { font-size: 20px; letter-spacing: -0.02em; }
 .page-head p { color: var(--muted); margin-top: 6px; }
-.head-actions { display: flex; gap: 10px; align-items: center; }
+.head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ok-note { color: #12915f; }
 
 .card { background: white; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .alert-strip {

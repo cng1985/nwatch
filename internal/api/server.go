@@ -141,6 +141,8 @@ func (s *Server) routes() {
 	authed.GET("/dashboard", s.permit(rbac.PermDashboardRead), s.dashboard)
 	authed.GET("/monitors", s.permit(rbac.PermMonitorRead), s.listMonitors)
 	authed.POST("/monitors", s.permit(rbac.PermMonitorWrite), s.createMonitor)
+	authed.GET("/monitors/export", s.permit(rbac.PermMonitorRead), s.exportMonitors)
+	authed.POST("/monitors/import", s.permit(rbac.PermMonitorWrite), s.importMonitors)
 	authed.GET("/monitors/processes", s.permit(rbac.PermMonitorRead), s.hostProcesses)
 	authed.GET("/monitors/:id", s.permit(rbac.PermMonitorRead), s.getMonitor)
 	authed.PUT("/monitors/:id", s.permit(rbac.PermMonitorWrite), s.updateMonitor)

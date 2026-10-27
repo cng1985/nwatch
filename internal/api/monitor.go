@@ -10,11 +10,11 @@ import (
 	"github.com/cng1985/nwatch/internal/model"
 	"github.com/cng1985/nwatch/internal/monitor"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func (s *Server) listMonitors(c *gin.Context) {
-	page, size := pageParams(c)
-	q := s.db.Model(&model.Monitor{}).Preload("Group").Preload("Notifiers")
+func (s *Server) monitorScope(c *gin.Context) *gorm.DB {
+	q := s.db.Model(&model.Monitor{})
 	if kw := c.Query("keyword"); kw != "" {
 		like := "%" + kw + "%"
 		q = q.Where("name LIKE ? OR url LIKE ? OR host LIKE ?", like, like, like)
@@ -28,6 +28,12 @@ func (s *Server) listMonitors(c *gin.Context) {
 	if gid := c.Query("groupId"); gid != "" {
 		q = q.Where("group_id = ?", gid)
 	}
+	return q
+}
+
+func (s *Server) listMonitors(c *gin.Context) {
+	page, size := pageParams(c)
+	q := s.monitorScope(c).Preload("Group").Preload("Notifiers")
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		fail(c, http.StatusInternalServerError, "查询失败")

@@ -35,6 +35,7 @@ config.yaml
 - Web 管理台：总览、主机资源、系统服务、Docker、Kubernetes、监控、脚本执行、定时任务、在线终端、证书、告警、通知、运行日志、分组、用户与角色、系统配置
 - 基于角色的访问控制：内置管理员、运维、只读，也可以自定义角色。一个用户可以有多个角色，菜单和接口都按权限控制
 - 配置导入导出，SQLite 备份
+- 监控列表导出、导入 Excel，便于批量修改和迁移
 
 ## 代码结构
 
@@ -168,6 +169,8 @@ docker run --rm -p 8080:8080 \
 
 ```text
 GET/POST        /api/monitors
+GET             /api/monitors/export
+POST            /api/monitors/import
 GET/PUT/DELETE  /api/monitors/:id
 POST            /api/monitors/:id/check
 POST            /api/monitors/:id/enable
@@ -264,6 +267,20 @@ GET/PUT/DELETE  /api/access/users/:id
 执行时间使用系统配置中的时区。超时最长 1 小时，执行记录保留 30 天。任务还在跑时，下一次到点会被跳过，同一个任务不会并行执行。配置导入导出会带上这些任务。
 
 执行记录在页面右侧抽屉里查询，可按任务、结果、触发方式、时间和关键字筛选。`GET /api/cron-runs` 支持 `jobId`、`success`（`true` 或 `false`）、`trigger`（`schedule` 或 `manual`）、`keyword`、`from`、`to`。日期写成 `YYYY-MM-DD`，按系统时区的自然日，结束日期当天包含在内。单个任务的记录接口接受除 `jobId` 以外的同样条件。
+
+## 监控导入导出
+
+监控列表可以导出为 Excel，改完后再导入。
+
+- 导出的是当前筛选结果，包含检测配置，也带上状态、最近结果和可用率
+- 导入只新建和更新，不会删除表格里没有的监控
+- 填了编号且本机存在这条监控时，按编号更新，名称也可以改
+- 编号留空时按名称查找：只有一条同名监控就更新，没有就新建，有多条则必须补编号
+- 从别的环境导入时先清空编号列，避免改到本机同编号的监控
+- 分组不存在时会自动创建。通知渠道必须已经存在，多个名称用逗号或顿号分隔
+- 导出的表格里有「说明」页，列出每一列怎么填
+
+`GET /api/monitors/export` 下载 xlsx，加上 `template=1` 只下载表头。`POST /api/monitors/import` 使用 multipart 字段 `file`。
 
 ## 用户与角色
 
