@@ -1,0 +1,10 @@
+# 生产环境差异配置。profile=pro 时在 application.yaml 之后加载。
+# 对外监听需要显式配置；凭据通过环境变量注入，不写入本文件。
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+logging:
+  level: info
+  format: json

@@ -1,0 +1,10 @@
+# 开发环境差异配置。profile=dev 时在 application.yaml 之后加载。
+# 数据库沿用基础配置的 data-dir/app.db。
+
+server:
+  host: 127.0.0.1
+  port: 8080
+
+logging:
+  level: info
+  format: json

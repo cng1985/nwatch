@@ -1,13 +1,13 @@
-# NMonitor
+# NWatch
 
 面向 Linux 环境的轻量级服务可用性监控。回答的问题很具体：服务现在能不能访问，证书还有多久过期，出了问题有没有立刻通知到人。
 
 默认只需要一个二进制、一个 SQLite 文件和一份配置：
 
 ```text
-nmonitor
-nmonitor.db
-config.yaml
+nwatch
+configs/
+data/app.db
 ```
 
 不依赖 MySQL、Redis 或消息队列。
@@ -39,72 +39,45 @@ config.yaml
 
 ## 代码结构
 
-后端按功能分包。`cmd/server` 只启动进程，`internal/app` 用 fx 把各包自己的 Module 组装起来。前端是 Vue 3 管理台，`npm run build` 写到 `internal/web/dist`，再由 `internal/web` 嵌入二进制。
+按《Go 项目结构与开发标准规范》（v3.4）组织：platform 承载横切能力，modules 按业务分组，app 是组合根。业务调用链为 Controller → Resource → Repository/适配器，公开方法统一 `y=f(x)` 外壳（Response/PageResponse）。
 
 ```text
-cmd/server/main.go        进程入口
-internal/app/             组装各功能模块并启动
-internal/config/          读取 config.yaml 和环境变量
-internal/database/        打开并关闭 SQLite
-internal/model/           监控、告警、通知等数据模型
-internal/settings/        运行时可改的系统配置
-internal/checker/         HTTP、证书、TCP、资源、脚本和进程检测
-internal/monitor/         监控请求的校验和规范化
-internal/state/           连续失败或成功后切换状态
-internal/scheduler/       每秒领取到期检测，工作池执行
-internal/metric/          按分钟、小时、天聚合检测结果
-internal/dashboard/       总览和趋势查询
-internal/alert/           异步通知队列，故障期间定时提醒
-internal/notifier/        钉钉、企业微信、Webhook
-internal/mailer/          邮件发送和失败重试
-internal/cronjob/         cron 表达式、脚本和 HTTP 定时任务
-internal/host/            本机 CPU、内存、磁盘和进程采集
-internal/shell/           在线终端会话和一次性连接凭证
-internal/svcctl/          调用 systemctl 和 journalctl
-internal/dockerctl/       调用 docker 管理容器和镜像
-internal/k8sctl/          调用 kubectl 管理 Kubernetes
-internal/logview/         写入并查询进程日志
-internal/maintenance/     数据库备份和历史清理
-internal/auth/            登录和 JWT
-internal/rbac/            用户、角色和权限
-internal/api/             HTTP 与 WebSocket 接口
-internal/transfer/        配置导入导出
-internal/web/             嵌入前端构建产物
-internal/version/         版本号
-web/                      Vue 3 管理台
-  src/views/              总览、资源、服务、Docker、Kubernetes、监控、证书、告警、通知、日志、用户与角色、配置等页面
-  src/components/         布局、图表、cron 表达式
-  src/api.js              接口调用
-  src/router.js           路由和登录拦截
-deploy/                   systemd 单元和安装脚本
-scripts/build.sh          Linux 构建脚本
-scripts/build.cmd         Windows cmd 构建脚本
-config.yaml               默认配置
-Dockerfile
-Makefile
+cmd/server/main.go        进程入口，仅调用 app.Run()
+internal/app/             组合根：启动、模块组合、受控迁移与幂等初始化
+internal/platform/
+  config/                 configs/ 三文件加载、profile 覆盖、环境变量与校验
+  database/               SQLite（默认）与 mysql/postgres/sqlserver 连接
+  response/ errors/       统一响应外壳与错误分类、应用码
+  middleware/ routing/    认证、授权、恢复、请求标识；路由注册契约
+  server/                 Gin 引擎、健康端点与 HTTP 生命周期
+  logging/ auth/ settings/ domain/ httpreq/ version/
+internal/modules/
+  migrations/             受控迁移模型清单
+  monitoring/             监控分组：monitor、group、checker、scheduler、state、
+                          metric、alert、dashboard、host、maintenance、script、shared
+  notify/                 通知分组：notifier（渠道）、mailer（邮件）
+  jobs/                   任务分组：cronjob
+  ops/                    运维分组：shell、service、docker、kube
+  admin/                  系统管理分组：access、settings、backup、logview
+configs/                  application.yaml、application-dev.yaml、application-pro.yaml
+web/                      Vue 3 管理台（src/）+ 构建产物（dist/）与 Go 嵌入
+scripts/                  build-platforms.cmd、build-platforms.ps1、install-linux.sh
+deploy/                   环境变量示例
+tests/                    跨模块集成测试
+docs/                     架构、接口、数据库、部署、验收与决策记录
 ```
 
 ## 构建
 
-需要本机已安装 Go 和 Node.js。脚本会先构建前端，写入 `internal/web/dist` 并嵌入二进制，再把可执行文件和 `config.yaml` 放到 `dist/<系统>-<架构>/`。
+需要本机已安装 Go 和 Node.js。脚本先构建前端（写入 `web/dist` 并嵌入二进制），再分平台编译并打包到 `release/<系统>-<架构>/`：
 
-在 Linux 上：
-
-```bash
-./scripts/build.sh            # 当前架构的 Linux 程序
-./scripts/build.sh windows    # 交叉编译 Windows 程序
-./scripts/build.sh all        # Linux 和 Windows 都构建
+```powershell
+scripts\build-platforms.cmd                        # Windows：默认三个目标
+scripts\build-platforms.cmd linux/amd64            # 指定目标
+pwsh scripts/build-platforms.ps1 -SkipWeb          # 已有 web/dist 时跳过前端
 ```
 
-在 Windows cmd 中：
-
-```bat
-scripts\build.cmd
-scripts\build.cmd linux
-scripts\build.cmd all
-```
-
-也可以继续用 Makefile，产物是当前目录下的 `nmonitor`：
+也可以用 Makefile，产物是当前目录下的 `nwatch`：
 
 ```bash
 make build
@@ -114,165 +87,90 @@ make build
 
 ```bash
 make build
-export NMONITOR_PASSWORD='your-password'
-./nmonitor
+export APP_ADMIN_PASSWORD='your-password'
+APP_PROFILE=dev ./nwatch
 ```
 
 浏览器打开 `http://127.0.0.1:8080`。未设置密码时，初始账号是 `admin` / `admin`，启动日志会提示尽快修改。
 
-只编译后端时，需要先构建前端，产物会写到 `internal/web/dist` 并嵌入二进制：
+只编译后端时，需要先构建前端：
 
 ```bash
 cd web && npm install && npm run build
-go build -o nmonitor ./cmd/server
+go build -o nwatch ./cmd/server
 ```
 
 ## 配置
 
-参见 `config.yaml`。密码不要写进文件，使用环境变量：
+统一放在 `configs/`：`application.yaml` 是基础配置，`application-dev.yaml` / `application-pro.yaml` 是 profile 差异配置，同一时间只加载基础 + 一个 profile。覆盖顺序：基础配置 < profile 配置 < 环境变量 < 命令行。
+
+启动定位参数：`--base-dir`、`--config-dir`、`--data-dir`、`--profile`（或 `APP_BASE_DIR`、`APP_CONFIG_DIR`、`APP_DATA_DIR`、`APP_PROFILE`）。SQLite 相对路径相对 data-dir 解析。`--version` 输出版本后退出。
+
+密码不要写进文件，使用环境变量（旧的 `NMONITOR_*` 名称作为已登记别名继续可用）：
 
 ```bash
-NMONITOR_PASSWORD
-NMONITOR_JWT_SECRET
-NMONITOR_CONFIG
-NMONITOR_USERNAME
-NMONITOR_SMTP_ENABLED
-NMONITOR_SMTP_HOST
-NMONITOR_SMTP_PORT
-NMONITOR_SMTP_USERNAME
-NMONITOR_SMTP_PASSWORD
-NMONITOR_SMTP_FROM
-NMONITOR_SMTP_TO
-NMONITOR_SMTP_ENCRYPTION
-NMONITOR_SHELL_ENABLED
-NMONITOR_SERVICE_ENABLED
-NMONITOR_DOCKER_ENABLED
-NMONITOR_KUBERNETES_ENABLED
-NMONITOR_KUBE_CONTEXT
-NMONITOR_KUBECONFIG
+APP_ADMIN_PASSWORD
+APP_JWT_SECRET
+APP_DATABASE_DSN
+APP_SMTP_HOST / APP_SMTP_PORT / APP_SMTP_USERNAME / APP_SMTP_PASSWORD
+APP_SMTP_FROM / APP_SMTP_TO / APP_SMTP_ENCRYPTION / APP_SMTP_ENABLED
+APP_SHELL_ENABLED / APP_SERVICE_ENABLED / APP_DOCKER_ENABLED
+APP_KUBERNETES_ENABLED / APP_KUBE_CONTEXT / APP_KUBECONFIG
 ```
 
-`NMONITOR_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。
+`APP_SMTP_ENCRYPTION` 可以是 `starttls`、`ssl` 或 `none`。收件人有多个时用逗号分隔。界面里保存的邮件配置会覆盖这里的环境变量。完整字段字典见 `docs/deployment.md`。
 
 ## systemd
 
 在已经编译好的机器上，用脚本安装并启动服务（需要 root，且系统使用 systemd）：
 
 ```bash
-make build
-sudo env NMONITOR_PASSWORD='your-password' ./deploy/install-service.sh
+sudo env APP_ADMIN_PASSWORD='your-password' ./scripts/install-linux.sh
 ```
 
-脚本把二进制和 `config.yaml` 放到 `/opt/nmonitor`，创建数据目录和 `nmonitor.env`，写入 systemd 单元，设置开机启动并立即启动。已经存在的 `config.yaml` 和 `nmonitor.env` 不会被覆盖。再次执行会更新二进制和单元；服务若已在运行，会重启以加载新程序。
-
-在终端里直接运行、并且还没有 `nmonitor.env` 时，会提示设置管理员密码。非交互环境下请通过 `NMONITOR_PASSWORD` 传入，否则会先写入示例值 `change-me`。
-
-也可以手工安装：
-
-```bash
-sudo mkdir -p /opt/nmonitor/data
-sudo cp nmonitor config.yaml /opt/nmonitor/
-sudo cp deploy/nmonitor.service /etc/systemd/system/
-sudo cp deploy/nmonitor.env.example /opt/nmonitor/nmonitor.env
-sudo systemctl enable --now nmonitor
-```
+脚本把二进制放到 `/opt/nwatch`、配置放到 `/opt/nwatch/configs`、数据放到 `/var/lib/nwatch`，创建专用用户 `nwatch` 与 systemd 单元（生产 profile=pro），设置开机启动并立即启动。已经存在的配置与环境文件不会被覆盖。再次执行会先停服务、更新二进制后重启；查看状态用 `systemctl status nwatch`，日志用 `journalctl -u nwatch`。
 
 ## Docker
 
 ```bash
-docker build -t nmonitor .
+docker build -t nwatch .
 docker run --rm -p 8080:8080 \
-  -e NMONITOR_PASSWORD=your-password \
-  -v nmonitor-data:/opt/nmonitor/data \
-  nmonitor
+  -e APP_PROFILE=pro -e APP_ADMIN_PASSWORD=your-password \
+  -v nwatch-data:/var/lib/nwatch \
+  nwatch
 ```
 
-数据库路径在容器内是 `/opt/nmonitor/data/nmonitor.db`。
+数据库路径在容器内是 `/var/lib/nwatch/app.db`。
 
 ## 接口
 
-除 `POST /api/auth/login`、`GET /health`、`GET /version` 外，接口需要 `Authorization: Bearer <token>`。
+除 `POST /api/auth/login`、`GET /health/live`、`GET /health/ready`、`GET /health`、`GET /version` 外，接口需要 `Authorization: Bearer <token>`。
 
-主要资源：
-
-```text
-GET/POST        /api/monitors
-GET             /api/monitors/export
-POST            /api/monitors/import
-GET             /api/monitors/requests/export
-POST            /api/monitors/requests/import
-GET/PUT/DELETE  /api/monitors/:id
-POST            /api/monitors/:id/check
-POST            /api/monitors/:id/enable
-POST            /api/monitors/:id/disable
-GET             /api/dashboard
-GET/POST        /api/notifiers
-POST            /api/notifiers/:id/test
-GET             /api/events
-GET             /api/certificates
-GET             /api/host
-GET             /api/host/processes
-POST            /api/scripts/run
-GET             /api/scripts/runs
-GET/POST        /api/cron-jobs
-GET/PUT/DELETE  /api/cron-jobs/:id
-POST            /api/cron-jobs/:id/run
-POST            /api/cron-jobs/:id/enable
-POST            /api/cron-jobs/:id/disable
-GET             /api/cron-jobs/:id/runs
-GET             /api/cron-runs
-GET             /api/cron/preview
-GET             /api/logs
-GET             /api/services
-POST            /api/services/:name/start
-POST            /api/services/:name/stop
-POST            /api/services/:name/restart
-GET             /api/services/:name/logs
-GET             /api/docker/containers
-GET             /api/docker/images
-POST            /api/docker/containers/:name/start
-POST            /api/docker/containers/:name/stop
-POST            /api/docker/containers/:name/restart
-GET             /api/docker/containers/:name/logs
-GET             /api/kubernetes/namespaces
-GET             /api/kubernetes/resources
-GET             /api/kubernetes/pods/:namespace/:name/logs
-POST            /api/kubernetes/pods/:namespace/:name/delete
-POST            /api/kubernetes/workloads/:kind/:namespace/:name/restart
-POST            /api/kubernetes/workloads/:kind/:namespace/:name/scale
-GET             /api/shell
-POST            /api/shell/ticket
-GET             /api/shell/ws
-GET             /api/access/permissions
-GET/POST        /api/access/roles
-GET/PUT/DELETE  /api/access/roles/:id
-GET/POST        /api/access/users
-GET/PUT/DELETE  /api/access/users/:id
-```
+普通业务 JSON API 成功与应用错误均返回 HTTP 200：单条成功是 `{"code":200,"msg":"success","data":...}`，分页原样输出 `{"data":[...],"total","page","page_size"}`，错误是 `{"code":400,"msg":"..."}`。网络层错误仍可能是真实非 200。完整端点清单见 `docs/api.md`。
 
 ## 系统服务
 
-管理台的「系统服务」调用本机 `systemctl` 列出 service 单元，并执行启动、停止和重启。日志通过 `journalctl -u` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同。
+管理台的「系统服务」调用本机 `systemctl` 列出 service 单元，并执行启动、停止和重启。日志通过 `journalctl -u` 读取，默认 200 行，最多 500 行。执行身份与进程相同。
 
 服务名只接受 systemd 的 service 单元，不能包含空格、路径或 shell 元字符。`systemd.service` 和 `init.service` 不能在这里操作。命令不经过 shell。启动、停止、重启和失败原因会写进运行日志。
 
-没有 `systemctl` 的环境仍可打开页面，接口会返回不可用原因。可以在 `config.yaml` 的 `service` 段设置 `enabled: false`，或用 `NMONITOR_SERVICE_ENABLED=false` 关闭。用 root 安装的 systemd 服务可以直接操作；普通用户可能因权限不足只能查看，或在操作时看到 systemctl 返回的拒绝信息。
+没有 `systemctl` 的环境仍可打开页面，接口会返回不可用原因。可以在配置的 `service` 段设置 `enabled: false`，或用 `APP_SERVICE_ENABLED=false` 关闭。用 root 安装的 systemd 服务可以直接操作；普通用户可能因权限不足只能查看，或在操作时看到 systemctl 返回的拒绝信息。
 
-## Docker
+## Docker 管理
 
-管理台的「Docker」调用本机 `docker` 客户端列出容器和镜像。容器可以启动、停止、重启，日志通过 `docker logs` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同，命令不经过 shell。
+管理台的「Docker」调用本机 `docker` 客户端列出容器和镜像。容器可以启动、停止、重启，日志通过 `docker logs` 读取，默认 200 行，最多 500 行。执行身份与进程相同，命令不经过 shell。
 
 容器名只接受字母、数字、下划线、点和横线，不能以横线开头，也不能包含空格或路径。这里不进入容器，也不删除容器或镜像。
 
-没有 `docker` 或连不上守护进程时，页面会提示不可用。可以在 `config.yaml` 的 `docker` 段设置 `enabled: false`，或用 `NMONITOR_DOCKER_ENABLED=false` 关闭。NMonitor 跑在容器里时，需要镜像内有 docker 客户端，并且能访问宿主机的 Docker 套接字，才会看到宿主机上的容器。
+没有 `docker` 或连不上守护进程时，页面会提示不可用。可以在配置的 `docker` 段设置 `enabled: false`，或用 `APP_DOCKER_ENABLED=false` 关闭。程序跑在容器里时，需要镜像内有 docker 客户端，并且能访问宿主机的 Docker 套接字，才会看到宿主机上的容器。
 
 ## Kubernetes
 
-管理台的「Kubernetes」调用本机 `kubectl`。可以按命名空间查看 Pod、Deployment、StatefulSet、DaemonSet 和 Service。Deployment、StatefulSet 和 DaemonSet 可以滚动重启，前两类还可以把副本数改成 0 到 64。删除 Pod 后由控制器重建。Pod 日志通过 `kubectl logs` 读取，默认 200 行，最多 500 行。执行身份与 NMonitor 进程相同，命令不经过 shell。
+管理台的「Kubernetes」调用本机 `kubectl`。可以按命名空间查看 Pod、Deployment、StatefulSet、DaemonSet 和 Service。Deployment、StatefulSet 和 DaemonSet 可以滚动重启，前两类还可以把副本数改成 0 到 64。删除 Pod 后由控制器重建。Pod 日志通过 `kubectl logs` 读取，默认 200 行，最多 500 行。执行身份与进程相同，命令不经过 shell。
 
 名称只接受 Kubernetes 的 DNS 名称。这里不提供进入容器的终端。
 
-`kubernetes.context` 和 `kubernetes.kubeconfig` 留空时使用当前环境的默认 kubeconfig。也可以用 `NMONITOR_KUBE_CONTEXT` 和 `NMONITOR_KUBECONFIG` 覆盖。没有 `kubectl`，或 kubeconfig 不能访问集群时，页面会提示原因。可以设置 `kubernetes.enabled: false`，或用 `NMONITOR_KUBERNETES_ENABLED=false` 关闭。
+`kubernetes.context` 和 `kubernetes.kubeconfig` 留空时使用当前环境的默认 kubeconfig。也可以用 `APP_KUBE_CONTEXT` 和 `APP_KUBECONFIG` 覆盖。没有 `kubectl`，或 kubeconfig 不能访问集群时，页面会提示原因。可以设置 `kubernetes.enabled: false`，或用 `APP_KUBERNETES_ENABLED=false` 关闭。
 
 ## 进程
 
@@ -282,9 +180,9 @@ GET/PUT/DELETE  /api/access/users/:id
 
 ## 在线终端
 
-管理台的「在线终端」通过 WebSocket 连接本机 Shell，执行身份与 NMonitor 进程相同。Linux 上启动 bash 或 sh；Windows 10 1809 及以上通过 ConPTY 启动 PowerShell，找不到时使用 cmd。页面先申请 30 秒内有效、只能使用一次的连接凭证，再升级连接，长期登录令牌不会出现在地址栏里。
+管理台的「在线终端」通过 WebSocket 连接本机 Shell，执行身份与进程相同。Linux 上启动 bash 或 sh；Windows 10 1809 及以上通过 ConPTY 启动 PowerShell，找不到时使用 cmd。页面先申请 30 秒内有效、只能使用一次的连接凭证，再升级连接，长期登录令牌不会出现在地址栏里。
 
-默认空闲 15 分钟断开，单次最长 4 小时，同时最多 8 个会话。页面可以同时打开多个终端，每个终端是一次独立会话。可以在 `config.yaml` 的 `shell` 段调整，或用 `NMONITOR_SHELL_ENABLED=false` 关闭。跨站页面不能连接。
+默认空闲 15 分钟断开，单次最长 4 小时，同时最多 8 个会话。页面可以同时打开多个终端，每个终端是一次独立会话。可以在配置的 `shell` 段调整，或用 `APP_SHELL_ENABLED=false` 关闭。跨站页面不能连接。
 
 会话的建立和断开会写进运行日志。用户在终端里提交的命令会同时写入运行日志和命令记录，内容包括登录用户、会话编号、来源地址和命令本身。命令记录保留 30 天，可在终端页面按用户和命令查询，有运行日志权限的账号也可以查询。方向键翻出的历史命令和 Tab 补全，按屏幕上实际提交的那一行记录。屏幕上是密码或口令提示时，随后输入的内容不会记录。直接敲下的按键、退格和粘贴会按最终提交的命令记录，而不是每个按键。
 
@@ -338,14 +236,23 @@ GET/PUT/DELETE  /api/access/users/:id
 
 至少保留一个启用的、可以管理用户与角色的账号。不能删除或停用当前登录账号。用户名以字母开头，2 到 32 位。修改密码后，已经发出的登录令牌在过期前仍然有效。
 
-原来的 `NMONITOR_USERNAME` 和 `NMONITOR_PASSWORD` 只用于创建第一个管理员。如果系统配置里已经保存过密码，会继续使用那份密码。之后在页面上修改这个账号的密码，启动提示也会跟着更新。
+`security.username` 和 `security.password`（或环境变量 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD`）只用于创建第一个管理员。如果系统配置里已经保存过密码，会继续使用那份密码。之后在页面上修改这个账号的密码，启动提示也会跟着更新。
 
-没有对应权限时，菜单里不显示入口，直接调用接口会返回 403。
+没有对应权限时，菜单里不显示入口，直接调用接口返回 `{"code":403,...}`。
 
 管理员角色会在启动时同步全部权限。已经存在的运维、只读角色如果还是原来的默认权限，启动时会补上 Docker 和 Kubernetes；权限已经被改过的角色保持原样，需要在「用户与角色」里另行勾选。
+
+## 数据库支持
+
+默认 SQLite（`data/app.db`，WAL）。`database.driver` 支持 `mysql`、`postgres`、`sqlserver`，连接串用 `database.dsn` / `APP_DATABASE_DSN` 注入。sqlite 已在本项目验证；其余三库的迁移、约束与并发用例尚未验证（见 `docs/decisions.md` D9）。
 
 ## 测试
 
 ```bash
+gofmt -l internal tests cmd web | grep . && exit 1 || true
+go vet ./...
 go test ./...
+cd web && npm run build
 ```
+
+集成测试位于 `tests/`，通过完整装配的业务模块走 HTTP 验证行为。

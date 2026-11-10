@@ -153,14 +153,14 @@ async function load() {
     catalog.value = demoCatalog
     return
   }
-  const [userRows, roleRows, groups] = await Promise.all([
+  const [userRows, roleRows, permGroups] = await Promise.all([
     api('/api/access/users'),
     api('/api/access/roles'),
     api('/api/access/permissions'),
   ])
-  users.value = userRows || []
-  roles.value = roleRows || []
-  catalog.value = groups || []
+  users.value = userRows?.items || []
+  roles.value = roleRows?.items || []
+  catalog.value = permGroups?.items || []
 }
 
 function openUser(row) {

@@ -166,7 +166,7 @@ async function load() {
   }
   const dash = await api('/api/dashboard?range=' + range.value)
   Object.assign(data, dash)
-  try { groups.value = can('group.read') ? await api('/api/groups') : [] } catch { groups.value = [] }
+  try { groups.value = can('group.read') ? (await api('/api/groups')).items || [] : [] } catch { groups.value = [] }
   try {
     const resources = await api('/api/host?range=1h')
     applyHost(resources.current || {})

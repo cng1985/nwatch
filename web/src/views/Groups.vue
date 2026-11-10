@@ -32,7 +32,7 @@ const items = ref([])
 const visible = ref(false)
 const error = ref('')
 const form = reactive({ id: 0, name: '', description: '', sort: 0 })
-async function load() { items.value = isDemo() ? demoGroups : await api('/api/groups') }
+async function load() { items.value = isDemo() ? demoGroups : (await api('/api/groups')).items || [] }
 function open(row) { Object.assign(form, { id: 0, name: '', description: '', sort: 0 }, row || {}); error.value = ''; visible.value = true }
 async function save() {
   if (isDemo()) { error.value = '演示模式不会写入服务器'; return }

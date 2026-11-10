@@ -1,15 +1,8 @@
+// nwatch 是一个模块化单体的服务端点：监控、告警、任务与运维管理台。
 package main
 
-import (
-	"log"
-
-	"github.com/cng1985/nwatch/internal/app"
-)
+import "github.com/cng1985/nwatch/internal/app"
 
 func main() {
-	application := app.New()
-	application.Run()
-	if err := application.Err(); err != nil {
-		log.Fatal(err)
-	}
+	app.Run()
 }

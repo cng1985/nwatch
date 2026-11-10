@@ -24,5 +24,5 @@ import { api } from '../api'
 import { demoCerts } from '../demo'
 import { clock, isDemo, statusText } from '../format'
 const items = ref([])
-onMounted(async () => { items.value = isDemo() ? demoCerts : await api('/api/certificates') })
+onMounted(async () => { items.value = isDemo() ? demoCerts : (await api('/api/certificates')).items || [] })
 </script>

@@ -1,0 +1,91 @@
+# 基础配置：所有环境共用的默认值。profile 差异见 application-dev.yaml / application-pro.yaml。
+# 覆盖顺序：基础配置 < profile 配置 < 环境变量 < 命令行。
+# 生产凭据不要写入本文件，使用环境变量注入（见 deploy/nmonitor.env.example）。
+# base-dir/config-dir/data-dir/profile 是启动定位参数，由命令行或环境变量确定，不在 YAML 中配置。
+
+app:
+  name: nwatch
+
+server:
+  host: 127.0.0.1
+  port: 8080
+  read_header_timeout: 5s
+  idle_timeout: 60s
+  max_header_bytes: 1048576
+  shutdown_timeout: 30s
+  trusted_proxies: []
+
+database:
+  enabled: true
+  driver: sqlite
+  # sqlite 相对 path 相对 data-dir。
+  path: app.db
+  max_open_conns: 8
+  max_idle_conns: 4
+  conn_max_lifetime: 1h
+  batch_size: 100
+  sqlite:
+    foreign_keys: true
+    busy_timeout: 5s
+    journal_mode: WAL
+
+scheduler:
+  worker_count: 20
+  scan_interval: 1s
+  queue_size: 200
+
+monitor:
+  default_timeout: 5s
+  default_interval: 60s
+
+history:
+  check_retention_days: 7
+  event_retention_days: 365
+  metric_retention_days: 90
+  hour_metric_retention_days: 730
+
+security:
+  username: admin
+  # password 与 jwt_secret 留空时：首次启动创建管理员用默认密码 admin，
+  # JWT 密钥写入 data-dir 下的 jwt.secret。生产请用环境变量注入。
+
+logging:
+  level: info
+  format: json
+
+backup:
+  enabled: true
+  dir: ./data/backups
+  retention_days: 7
+  hour: 3
+
+# 检测失败后发信。密码不要写进文件，用环境变量注入。
+mail:
+  enabled: false
+  host: ""
+  port: 587
+  username: ""
+  from: ""
+  to: ""
+  encryption: starttls
+
+# 管理台里的交互式终端，身份与进程相同。提交的命令会记下登录用户。
+shell:
+  enabled: true
+  idle_timeout: 15m
+  max_lifetime: 4h
+  max_sessions: 8
+
+# 管理台里的系统服务。通过本机 systemctl 启停，并用 journalctl 查看日志。
+service:
+  enabled: true
+
+# 管理台里的 Docker。通过本机 docker 客户端管理容器和镜像。
+docker:
+  enabled: true
+
+# 管理台里的 Kubernetes。context 和 kubeconfig 留空时使用当前环境的默认配置。
+kubernetes:
+  enabled: true
+  context: ""
+  kubeconfig: ""
