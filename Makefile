@@ -1,16 +1,23 @@
-.PHONY: web build test run install-service
+.PHONY: web build test vet run install-service clean
 
 web:
 	cd web && npm install && npm run build
 
 build: web
-	go build -o nmonitor ./cmd/server
+	go build -o nwatch ./cmd/server
 
 test:
 	go test ./...
 
+vet:
+	go vet ./...
+
 run: build
-	./nmonitor
+	APP_PROFILE=dev ./nwatch
 
 install-service:
-	./deploy/install-service.sh
+	./scripts/install-linux.sh
+
+clean:
+	rm -f nwatch
+	rm -rf release

@@ -42,7 +42,7 @@ const items = ref([])
 const visible = ref(false)
 const error = ref('')
 const form = reactive({ id: 0, name: '', type: 'dingtalk', webhookUrl: '', secret: '', enabled: true })
-async function load() { items.value = isDemo() ? demoNotifiers : await api('/api/notifiers') }
+async function load() { items.value = isDemo() ? demoNotifiers : (await api('/api/notifiers')).items || [] }
 function open(row) { Object.assign(form, { id: 0, name: '', type: 'dingtalk', webhookUrl: '', secret: '', enabled: true }, row || {}); form.webhookUrl = row ? '' : form.webhookUrl; error.value = ''; visible.value = true }
 async function save() {
   if (isDemo()) { error.value = '演示模式不会写入服务器'; return }

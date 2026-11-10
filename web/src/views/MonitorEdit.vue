@@ -369,7 +369,7 @@ onMounted(async () => {
     }
     return
   }
-  groups.value = await api('/api/groups')
+  groups.value = (await api('/api/groups')).items || []
   if (!editing.value) {
     applyProcessQuery()
     return
