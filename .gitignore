@@ -13,3 +13,8 @@ data/jwt.secret
 nmonitor.env
 nwatch.env
 .DS_Store
+
+# Demo ERP (self-contained under erp/)
+erp/backend/data/
+erp/frontend/node_modules/
+erp/frontend/dist/
