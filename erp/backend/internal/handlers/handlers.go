@@ -60,17 +60,25 @@ func (a *API) getProduct(c *gin.Context) {
 }
 
 type createProductReq struct {
-	SKU         string  `json:"sku" binding:"required"`
-	Name        string  `json:"name" binding:"required"`
-	Description string  `json:"description"`
-	UnitPrice   float64 `json:"unit_price" binding:"required"`
-	InitialQty  int     `json:"initial_qty"`
+	SKU         string   `json:"sku" binding:"required"`
+	Name        string   `json:"name" binding:"required"`
+	Description string   `json:"description"`
+	UnitPrice   *float64 `json:"unit_price" binding:"required"` // pointer: distinguish omitted vs 0
+	InitialQty  int      `json:"initial_qty"`
 }
 
 func (a *API) createProduct(c *gin.Context) {
 	var req createProductReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.UnitPrice == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unit_price is required"})
+		return
+	}
+	if *req.UnitPrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unit_price must be >= 0"})
 		return
 	}
 	if req.InitialQty < 0 {
@@ -83,7 +91,7 @@ func (a *API) createProduct(c *gin.Context) {
 			SKU:         req.SKU,
 			Name:        req.Name,
 			Description: req.Description,
-			UnitPrice:   req.UnitPrice,
+			UnitPrice:   *req.UnitPrice,
 		}
 		if err := tx.Create(&product).Error; err != nil {
 			return err
